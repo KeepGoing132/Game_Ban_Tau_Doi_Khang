@@ -1,9 +1,14 @@
 @echo off
 chcp 65001 >nul
-title BATTLESHIP CLIENT
+pushd "%~dp0"
 if not exist "bin\client\ClientMain.class" (
-    echo Chưa biên dịch! Đang tiến hành biên dịch...
-    call compile.bat
+    call "%~dp0compile.bat"
+    if errorlevel 1 (
+        popd
+        exit /b 1
+    )
 )
-echo Đang mở giao diện Battleship Client...
-start java -Dfile.encoding=UTF-8 -cp bin client.ClientMain
+java -Dfile.encoding=UTF-8 -cp "%~dp0bin" client.ClientMain
+set "BATTLESHIP_EXIT=%ERRORLEVEL%"
+popd
+exit /b %BATTLESHIP_EXIT%

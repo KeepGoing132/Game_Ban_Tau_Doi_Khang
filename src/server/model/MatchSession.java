@@ -2,382 +2,145 @@ package server.model;
 
 import common.config.GameConfig;
 import common.model.*;
-import common.protocol.Message;
-import common.protocol.MessageType;
-import server.manager.StorageManager;
-import server.manager.UserManager;
+import common.protocol.*;
+import server.manager.*;
 import server.network.ClientHandler;
-
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.LongSupplier;
 
+/** Authoritative state machine. The registry lock is never acquired from inside this lock. */
 public class MatchSession {
-    private final String matchId;
-    private final ClientHandler player1;
-    private final ClientHandler player2;
-    private final Board board1 = new Board();
-    private final Board board2 = new Board();
-    private boolean p1Ready = false;
-    private boolean p2Ready = false;
-
-    private int currentTurnPlayerId = -1;
-    private long startTime;
-    private int p1Shots = 0;
-    private int p2Shots = 0;
-    private boolean isFinished = false;
-
-    private boolean p1RematchAgreed = false;
-    private boolean p2RematchAgreed = false;
-
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
-    private ScheduledFuture<?> turnTimerFuture;
-
-    private final UserManager userManager;
-    private final StorageManager storageManager;
-
-    public MatchSession(String matchId, ClientHandler player1, ClientHandler player2, UserManager userManager, StorageManager storageManager) {
-        this.matchId = matchId;
-        this.player1 = player1;
-        this.player2 = player2;
-        this.userManager = userManager;
-        this.storageManager = storageManager;
+    public enum State {PLACING,RUNNING,FINISHED,CANCELLED}
+    private final String matchId,roomId;
+    private final ClientHandler p1,p2;
+    private final User u1,u2;
+    private Board b1=new Board(),b2=new Board();
+    private boolean ready1,ready2,rematch1,rematch2,resultSaved;
+    private State state=State.PLACING;
+    private int currentPlayer=-1,turnId,shots1,shots2;
+    private long startedAt,endedAt,deadlineMs,deadlineNanos,rematchDeadline;
+    private final UserManager users;
+    private final StorageManager storage;
+    private final ScheduledExecutorService scheduler;
+    private ScheduledFuture<?> timer;
+    private ScheduledFuture<?> postGameTimer;
+    private Runnable finishedCallback;
+    private final LongSupplier epoch,nano;
+    private final Random random;
+    public MatchSession(String id,String room,ClientHandler p1,ClientHandler p2,UserManager users,StorageManager storage,ScheduledExecutorService scheduler,Runnable finished) {
+        this(id,room,p1,p2,users,storage,scheduler,finished,System::currentTimeMillis,System::nanoTime,new Random());
     }
-
-    public String getMatchId() {
-        return matchId;
+    public MatchSession(String id,String room,ClientHandler p1,ClientHandler p2,UserManager users,StorageManager storage,ScheduledExecutorService scheduler,Runnable finished,LongSupplier epoch,LongSupplier nano,Random random) {
+        this.matchId=id;this.roomId=room;this.p1=p1;this.p2=p2;this.u1=p1.getUser();this.u2=p2.getUser();this.users=users;this.storage=storage;this.scheduler=scheduler;this.finishedCallback=finished;this.epoch=epoch;this.nano=nano;this.random=random;
     }
-
-    public ClientHandler getPlayer1() {
-        return player1;
-    }
-
-    public ClientHandler getPlayer2() {
-        return player2;
-    }
-
-    public ClientHandler getOpponent(ClientHandler player) {
-        if (player.equals(player1)) return player2;
-        if (player.equals(player2)) return player1;
-        return null;
-    }
-
-    public Board getBoard(ClientHandler player) {
-        return player.equals(player1) ? board1 : board2;
-    }
-
-    public Board getOpponentBoard(ClientHandler player) {
-        return player.equals(player1) ? board2 : board1;
-    }
-
-    public synchronized boolean setPlayerShips(ClientHandler player, List<Ship> ships) {
-        Board board = getBoard(player);
-        board.setShips(ships);
-        return board.validateAllShips();
-    }
-
-    public synchronized void setPlayerReady(ClientHandler player) {
-        if (isFinished) return;
-        if (player.equals(player1)) {
-            p1Ready = true;
-        } else if (player.equals(player2)) {
-            p2Ready = true;
+    public void setFinishedCallback(Runnable callback){finishedCallback=callback;}
+    public String getMatchId(){return matchId;}
+    public String getRoomId(){return roomId;}
+    public ClientHandler getPlayer1(){return p1;}
+    public ClientHandler getPlayer2(){return p2;}
+    public ClientHandler getOpponent(ClientHandler c){if(c==p1)return p2;if(c==p2)return p1;throw new DomainException("INVALID_STATE");}
+    private User user(ClientHandler c){if(c==p1)return u1;if(c==p2)return u2;throw new DomainException("INVALID_STATE");}
+    private Board board(ClientHandler c){user(c);return c==p1?b1:b2;}
+    private Message event(MessageType type){return new Message(type).put("match_id",matchId).put("room_id",roomId);}
+    private void both(Message event){p1.sendMessage(event);p2.sendMessage(event);}
+    public synchronized void place(ClientHandler c,List<Ship> ships){
+        user(c);if(state!=State.PLACING || (c==p1?ready1:ready2))throw new DomainException("INVALID_STATE","Hủy Ready trước khi sửa tàu");
+        if(ships==null || ships.size()!=5)throw new DomainException("INVALID_FLEET");
+        Board candidate=new Board();List<Ship> copy=new ArrayList<>();
+        for(Ship s:ships){
+            if(s==null || s.getCoordinates()==null)throw new DomainException("INVALID_FLEET");
+            List<Coordinate> points=new ArrayList<>();
+            for(Coordinate point:s.getCoordinates()){if(point==null)throw new DomainException("INVALID_FLEET");points.add(new Coordinate(point.getX(),point.getY()));}
+            copy.add(new Ship(s.getId(),s.getSize(),points));
         }
-
-        ClientHandler opp = getOpponent(player);
-        if (opp != null) {
-            Message oppReadyMsg = new Message(MessageType.OPPONENT_READY_NOTIFY);
-            oppReadyMsg.put("player_id", player.getUser().getUserId());
-            oppReadyMsg.put("username", player.getUser().getUsername());
-            opp.sendMessage(oppReadyMsg);
-        }
-
-        if (p1Ready && p2Ready) {
-            startMatch();
-        }
+        candidate.setShips(copy);
+        if(!candidate.validateAllShips())throw new DomainException("INVALID_FLEET","Bộ tàu phải thẳng, liên tục và đủ [5,4,3,3,2]");
+        if(c==p1)b1=candidate;else b2=candidate;
+        c.reply(event(MessageType.PLACE_SHIPS_RESP));
     }
-
-    private synchronized void startMatch() {
-        this.startTime = System.currentTimeMillis();
-        // Chọn ngẫu nhiên người bắn phát đầu tiên (50/50)
-        boolean p1First = new Random().nextBoolean();
-        currentTurnPlayerId = p1First ? player1.getUser().getUserId() : player2.getUser().getUserId();
-
-        Message startMsg = new Message(MessageType.MATCH_START);
-        startMsg.put("match_id", matchId);
-        startMsg.put("first_turn_player_id", currentTurnPlayerId);
-        startMsg.put("turn_time_limit_sec", GameConfig.TURN_TIMEOUT_SECONDS);
-
-        Map<String, Object> p1Data = new LinkedHashMap<>();
-        p1Data.put("user_id", player1.getUser().getUserId());
-        p1Data.put("username", player1.getUser().getUsername());
-        startMsg.put("player1", p1Data);
-
-        Map<String, Object> p2Data = new LinkedHashMap<>();
-        p2Data.put("user_id", player2.getUser().getUserId());
-        p2Data.put("username", player2.getUser().getUsername());
-        startMsg.put("player2", p2Data);
-
-        player1.sendMessage(startMsg);
-        player2.sendMessage(startMsg);
-
-        startTurnTimer();
+    public synchronized void ready(ClientHandler c,boolean value){
+        user(c);if(state!=State.PLACING)throw new DomainException("INVALID_STATE");
+        if(value && !board(c).validateAllShips())throw new DomainException("NOT_READY","Chưa có bố trí tàu hợp lệ");
+        if(c==p1)ready1=value;else ready2=value;
+        users.updatePhase(c,value?"READY_WAITING":"PLACING");
+        c.reply(event(MessageType.PLAYER_READY_RESP).put("ready",value));
+        both(event(MessageType.READY_STATE_NOTIFY).put("player1_id",u1.getUserId()).put("player2_id",u2.getUserId()).put("player1_ready",ready1).put("player2_ready",ready2));
+        if(ready1 && ready2)start();
     }
-
-    private synchronized void startTurnTimer() {
-        if (turnTimerFuture != null && !turnTimerFuture.isDone()) {
-            turnTimerFuture.cancel(true);
-        }
-        if (isFinished) return;
-
-        turnTimerFuture = scheduler.schedule(this::handleTurnTimeout, GameConfig.TURN_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    private void start(){
+        if(state!=State.PLACING)return;
+        state=State.RUNNING;startedAt=epoch.getAsLong();currentPlayer=random.nextBoolean()?u1.getUserId():u2.getUserId();
+        users.updatePhase(p1,"IN_BATTLE");users.updatePhase(p2,"IN_BATTLE");newTurn();
+        Message start=turnEvent(MessageType.MATCH_START).put("first_turn_player_id",currentPlayer).put("turn_time_limit_sec",GameConfig.TURN_TIMEOUT_SECONDS).put("player1",users.publicUser(u1)).put("player2",users.publicUser(u2));both(start);
     }
-
-    private synchronized void handleTurnTimeout() {
-        if (isFinished) return;
-
-        ClientHandler currentShooter = (currentTurnPlayerId == player1.getUser().getUserId()) ? player1 : player2;
-        Board oppBoard = getOpponentBoard(currentShooter);
-
-        // Chọn ngẫu nhiên một ô chưa bắn trên bàn cờ đối phương để bắn tự động
-        List<Coordinate> unshotCoords = new ArrayList<>();
-        for (int x = 0; x < GameConfig.BOARD_SIZE; x++) {
-            for (int y = 0; y < GameConfig.BOARD_SIZE; y++) {
-                Coordinate c = new Coordinate(x, y);
-                if (!oppBoard.hasBeenShot(c)) {
-                    unshotCoords.add(c);
-                }
-            }
-        }
-
-        if (unshotCoords.isEmpty()) return;
-
-        Coordinate autoCoord = unshotCoords.get(new Random().nextInt(unshotCoords.size()));
-
-        Message notifyMsg = new Message(MessageType.TIMEOUT_NOTIFY);
-        notifyMsg.put("player_id", currentShooter.getUser().getUserId());
-        notifyMsg.put("auto_x", autoCoord.getX());
-        notifyMsg.put("auto_y", autoCoord.getY());
-        notifyMsg.setMessage("Người chơi " + currentShooter.getUser().getUsername() + " hết 15s lượt bắn! Server tự động bắn ô (" + autoCoord.getX() + ", " + autoCoord.getY() + ")");
-        player1.sendMessage(notifyMsg);
-        player2.sendMessage(notifyMsg);
-
-        executeShot(currentShooter, autoCoord);
+    private Message turnEvent(MessageType type){return event(type).put("turn_id",turnId).put("current_turn_player_id",currentPlayer).put("deadline_ms",deadlineMs).put("time_limit_sec",GameConfig.TURN_TIMEOUT_SECONDS);}
+    private void newTurn(){
+        if(timer!=null)timer.cancel(false);turnId++;
+        deadlineMs=epoch.getAsLong()+GameConfig.TURN_TIMEOUT_MS;deadlineNanos=nano.getAsLong()+TimeUnit.MILLISECONDS.toNanos(GameConfig.TURN_TIMEOUT_MS);
+        final int expectedTurn=turnId;
+        timer=scheduler.schedule(()->timeout(expectedTurn),GameConfig.TURN_TIMEOUT_MS,TimeUnit.MILLISECONDS);
     }
-
-    public synchronized void handleFire(ClientHandler shooter, Coordinate c) {
-        if (isFinished) return;
-        if (shooter.getUser().getUserId() != currentTurnPlayerId) {
-            shooter.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Chưa tới lượt bắn của bạn!"));
-            return;
-        }
-
-        Board oppBoard = getOpponentBoard(shooter);
-        if (oppBoard.hasBeenShot(c)) {
-            shooter.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Ô này đã được bắn trước đó!"));
-            return;
-        }
-
-        // Hủy timer cũ vì đã bắn trong hạn 15s
-        if (turnTimerFuture != null && !turnTimerFuture.isDone()) {
-            turnTimerFuture.cancel(true);
-        }
-
-        executeShot(shooter, c);
+    public synchronized void timeout(int expectedTurn){
+        if(state!=State.RUNNING || turnId!=expectedTurn)return;
+        long remaining=deadlineNanos-nano.getAsLong();
+        if(remaining>0){timer=scheduler.schedule(()->timeout(expectedTurn),remaining,TimeUnit.NANOSECONDS);return;}
+        int expired=currentPlayer;
+        both(event(MessageType.TIMEOUT_NOTIFY).put("turn_id",turnId).put("player_id",expired).put("deadline_ms",deadlineMs).put("action","LOSE_TURN"));
+        currentPlayer=expired==u1.getUserId()?u2.getUserId():u1.getUserId();newTurn();both(turnEvent(MessageType.TURN_CHANGE));
     }
-
-    private synchronized void executeShot(ClientHandler shooter, Coordinate c) {
-        if (shooter.equals(player1)) p1Shots++;
-        else p2Shots++;
-
-        ClientHandler target = getOpponent(shooter);
-        Board oppBoard = getOpponentBoard(shooter);
-
-        ShotResult result = oppBoard.receiveShot(c);
-        Ship sunkShip = null;
-        if (result == ShotResult.SUNK) {
-            sunkShip = oppBoard.getShipAt(c);
-        }
-
-        // Kiểm tra xem trận đấu đã ngã ngũ chưa
-        boolean matchOver = oppBoard.areAllShipsSunk();
-
-        int nextTurnId;
-        if (matchOver) {
-            nextTurnId = -1;
-        } else if (result == ShotResult.HIT || result == ShotResult.SUNK) {
-            // LUẬT: Bắn trúng hoặc đánh chìm tàu -> TIẾP TỤC ĐƯỢC BẮN!
-            nextTurnId = shooter.getUser().getUserId();
-        } else {
-            // Bắn trượt (MISS) -> Đổi lượt cho đối thủ!
-            nextTurnId = target.getUser().getUserId();
-        }
-        currentTurnPlayerId = nextTurnId;
-
-        // Gửi kết quả phát bắn tới cả 2 bên
-        Message fireResultMsg = new Message(MessageType.FIRE_RESULT);
-        fireResultMsg.put("shooter_id", shooter.getUser().getUserId());
-        fireResultMsg.put("target_id", target.getUser().getUserId());
-        Map<String, Object> coordMap = new LinkedHashMap<>();
-        coordMap.put("x", c.getX());
-        coordMap.put("y", c.getY());
-        fireResultMsg.put("coordinate", coordMap);
-        fireResultMsg.put("result", result.name());
-        fireResultMsg.put("remaining_ships_target", oppBoard.getRemainingShipsCount());
-        fireResultMsg.put("next_turn_player_id", nextTurnId);
-
-        if (sunkShip != null) {
-            List<Map<String, Object>> sunkCoords = new ArrayList<>();
-            for (Coordinate sc : sunkShip.getCoordinates()) {
-                Map<String, Object> sm = new LinkedHashMap<>();
-                sm.put("x", sc.getX());
-                sm.put("y", sc.getY());
-                sunkCoords.add(sm);
-            }
-            fireResultMsg.put("sunk_ship_coords", sunkCoords);
-            fireResultMsg.put("sunk_ship_name", sunkShip.getId());
-        }
-
-        player1.sendMessage(fireResultMsg);
-        player2.sendMessage(fireResultMsg);
-
-        if (matchOver) {
-            endMatch(shooter, target, "ALL_SHIPS_DESTROYED");
-        } else {
-            // Phát tiếp thông báo TURN_CHANGE và kích hoạt Timer 15s mới
-            Message turnMsg = new Message(MessageType.TURN_CHANGE);
-            turnMsg.put("current_turn_player_id", currentTurnPlayerId);
-            turnMsg.put("time_limit_sec", GameConfig.TURN_TIMEOUT_SECONDS);
-            player1.sendMessage(turnMsg);
-            player2.sendMessage(turnMsg);
-
-            startTurnTimer();
-        }
+    public synchronized void fire(ClientHandler c,Message request,int requestedTurn,Coordinate point){
+        User shooter=user(c);
+        if(state!=State.RUNNING)throw new DomainException("INVALID_STATE");
+        if(requestedTurn!=turnId)throw new DomainException("STALE_TURN");
+        if(nano.getAsLong()>=deadlineNanos){timeout(turnId);throw new DomainException("TURN_EXPIRED");}
+        if(shooter.getUserId()!=currentPlayer)throw new DomainException("NOT_YOUR_TURN");
+        if(point.getX()<0 || point.getX()>=10 || point.getY()<0 || point.getY()>=10)throw new DomainException("OUT_OF_BOUNDS");
+        Board target=board(getOpponent(c));if(target.hasBeenShot(point))throw new DomainException("ALREADY_SHOT");
+        int processedTurn=turnId;
+        if(c==p1)shots1++;else shots2++;
+        ShotResult result=target.receiveShot(point);
+        boolean over=target.areAllShipsSunk();
+        int next=over?-1:(result==ShotResult.MISS?user(getOpponent(c)).getUserId():shooter.getUserId());
+        Message fire=event(MessageType.FIRE_RESULT).put("turn_id",processedTurn).put("shooter_id",shooter.getUserId()).put("target_id",user(getOpponent(c)).getUserId()).put("coordinate",coord(point)).put("result",result.name()).put("remaining_ships_target",target.getRemainingShipsCount()).put("next_turn_player_id",next);
+        if(result==ShotResult.SUNK){Ship ship=target.getShipAt(point);List<Map<String,Object>> coords=new ArrayList<>();for(Coordinate p:ship.getCoordinates())coords.add(coord(p));fire.put("sunk_ship_coords",coords).put("sunk_ship_name",ship.getId());}
+        getOpponent(c).sendMessage(fire);c.reply(fire);
+        currentPlayer=next;
+        if(over)finish(c,getOpponent(c),"ALL_SHIPS_DESTROYED");else{newTurn();both(turnEvent(MessageType.TURN_CHANGE));}
     }
-
-    public synchronized void surrender(ClientHandler surrenderingPlayer) {
-        if (isFinished) return;
-        ClientHandler winner = getOpponent(surrenderingPlayer);
-        endMatch(winner, surrenderingPlayer, "SURRENDER");
+    private static Map<String,Object> coord(Coordinate p){Map<String,Object> m=new LinkedHashMap<>();m.put("x",p.getX());m.put("y",p.getY());return m;}
+    public synchronized void leave(ClientHandler c,String reason){
+        user(c);if(state==State.RUNNING)finish(getOpponent(c),c,reason);else if(state==State.PLACING)cancel();
     }
-
-    public synchronized void endMatch(ClientHandler winner, ClientHandler loser, String reason) {
-        if (isFinished) return;
-        isFinished = true;
-
-        if (turnTimerFuture != null && !turnTimerFuture.isDone()) {
-            turnTimerFuture.cancel(true);
-        }
-        scheduler.shutdown();
-
-        long durationSec = (System.currentTimeMillis() - startTime) / 1000;
-
-        // Cập nhật điểm số
-        winner.getUser().addWin(GameConfig.WIN_POINTS);
-        loser.getUser().addLoss(GameConfig.LOSE_POINTS);
-        storageManager.saveUsers();
-
-        // Ghi lại lịch sử trận đấu
-        MatchRecord record = new MatchRecord();
-        record.setMatchId(matchId);
-        record.setPlayer1Id(player1.getUser().getUserId());
-        record.setPlayer1Name(player1.getUser().getUsername());
-        record.setPlayer2Id(player2.getUser().getUserId());
-        record.setPlayer2Name(player2.getUser().getUsername());
-        record.setWinnerId(winner.getUser().getUserId());
-        record.setWinnerName(winner.getUser().getUsername());
-        record.setDurationSeconds(durationSec);
-        record.setPlayer1Shots(p1Shots);
-        record.setPlayer2Shots(p2Shots);
-        storageManager.saveMatch(record);
-
-        // Gửi MATCH_END tới 2 Client
-        Message endMsg = new Message(MessageType.MATCH_END);
-        endMsg.put("match_id", matchId);
-        endMsg.put("winner_id", winner.getUser().getUserId());
-        endMsg.put("loser_id", loser.getUser().getUserId());
-        endMsg.put("reason", reason);
-        endMsg.put("duration_seconds", durationSec);
-        endMsg.put("player1_shots", p1Shots);
-        endMsg.put("player2_shots", p2Shots);
-
-        Map<String, Object> p1Score = new LinkedHashMap<>();
-        p1Score.put("points_awarded", winner.equals(player1) ? GameConfig.WIN_POINTS : GameConfig.LOSE_POINTS);
-        p1Score.put("total_points", player1.getUser().getTotalPoints());
-        p1Score.put("total_wins", player1.getUser().getTotalWins());
-
-        Map<String, Object> p2Score = new LinkedHashMap<>();
-        p2Score.put("points_awarded", winner.equals(player2) ? GameConfig.WIN_POINTS : GameConfig.LOSE_POINTS);
-        p2Score.put("total_points", player2.getUser().getTotalPoints());
-        p2Score.put("total_wins", player2.getUser().getTotalWins());
-
-        Map<String, Object> scoresMap = new LinkedHashMap<>();
-        scoresMap.put(String.valueOf(player1.getUser().getUserId()), p1Score);
-        scoresMap.put(String.valueOf(player2.getUser().getUserId()), p2Score);
-        endMsg.put("scores", scoresMap);
-
-        player1.sendMessage(endMsg);
-        player2.sendMessage(endMsg);
-
-        // Đổi trạng thái user về IDLE
-        userManager.updateUserStatus(player1.getUser(), UserStatus.IDLE);
-        userManager.updateUserStatus(player2.getUser(), UserStatus.IDLE);
+    private void finish(ClientHandler winner,ClientHandler loser,String reason){
+        if(state!=State.RUNNING)return;
+        state=State.FINISHED;endedAt=epoch.getAsLong();rematchDeadline=endedAt+GameConfig.REMATCH_TIMEOUT_MS;cancelTimers();
+        MatchRecord r=new MatchRecord();r.setMatchId(matchId);r.setPlayer1Id(u1.getUserId());r.setPlayer1Name(u1.getUsername());r.setPlayer2Id(u2.getUserId());r.setPlayer2Name(u2.getUsername());r.setWinnerId(user(winner).getUserId());r.setWinnerName(user(winner).getUsername());r.setLoserId(user(loser).getUserId());r.setLoserName(user(loser).getUsername());r.setStartedAt(startedAt);r.setEndedAt(endedAt);r.setTimestamp(endedAt);r.setDurationSeconds(Math.max(0,(endedAt-startedAt)/1000));r.setPlayer1Shots(shots1);r.setPlayer2Shots(shots2);r.setPlayer1Points(winner==p1?3:0);r.setPlayer2Points(winner==p2?3:0);r.setReason(reason);
+        boolean practice=u1.getUserId()<0 || u2.getUserId()<0;
+        if(practice){r.setPlayer1Points(0);r.setPlayer2Points(0);resultSaved=true;}else resultSaved=storage.commitResult(r);
+        Map<String,Object> scores=new LinkedHashMap<>();scores.put(String.valueOf(u1.getUserId()),score(u1,r.getPlayer1Points()));scores.put(String.valueOf(u2.getUserId()),score(u2,r.getPlayer2Points()));
+        users.updatePhase(p1,"POST_GAME");users.updatePhase(p2,"POST_GAME");
+        both(event(MessageType.MATCH_END).put("winner_id",user(winner).getUserId()).put("loser_id",user(loser).getUserId()).put("reason",reason).put("duration_seconds",r.getDurationSeconds()).put("player1_shots",shots1).put("player2_shots",shots2).put("scores",scores).put("storage_saved",resultSaved).put("expires_at_ms",rematchDeadline));
+        if(!resultSaved)both(Message.error(MessageType.ERROR_NOTIFY,"Kết quả đang chờ lưu; điểm chưa được áp dụng").errorCode("STORAGE_ERROR").put("match_id",matchId));
+        // Callback runs later on scheduler, outside this match lock.
+        scheduler.execute(finishedCallback);
     }
-
-    public synchronized void requestRematch(ClientHandler requester) {
-        if (requester.equals(player1)) p1RematchAgreed = true;
-        if (requester.equals(player2)) p2RematchAgreed = true;
-
-        ClientHandler opp = getOpponent(requester);
-        if (opp != null) {
-            Message notify = new Message(MessageType.REMATCH_NOTIFY);
-            notify.put("requester_id", requester.getUser().getUserId());
-            notify.put("requester_name", requester.getUser().getUsername());
-            opp.sendMessage(notify);
-        }
-
-        checkBothRematchAgreed();
+    private Map<String,Object> score(User u,int awarded){Map<String,Object> m=users.publicUser(u);m.put("points_awarded",resultSaved?awarded:0);return m;}
+    public synchronized boolean agreeRematch(ClientHandler c){
+        user(c);if(state!=State.FINISHED || epoch.getAsLong()>=rematchDeadline)throw new DomainException("INVALID_STATE","Hết thời gian chơi lại");
+        if(c==p1)rematch1=true;else rematch2=true;return rematch1 && rematch2;
     }
-
-    public synchronized void confirmRematch(ClientHandler responder, boolean accept) {
-        if (!accept) {
-            ClientHandler opp = getOpponent(responder);
-            if (opp != null) {
-                opp.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Đối thủ đã từ chối chơi lại."));
-            }
-            return;
-        }
-
-        if (responder.equals(player1)) p1RematchAgreed = true;
-        if (responder.equals(player2)) p2RematchAgreed = true;
-
-        checkBothRematchAgreed();
-    }
-
-    private synchronized void checkBothRematchAgreed() {
-        if (p1RematchAgreed && p2RematchAgreed) {
-            // Cả hai đồng ý chơi lại -> Reset bàn cờ và gửi REMATCH_START
-            p1Ready = false;
-            p2Ready = false;
-            p1RematchAgreed = false;
-            p2RematchAgreed = false;
-            board1.getShips().clear();
-            board1.getShotHistory().clear();
-            board2.getShips().clear();
-            board2.getShotHistory().clear();
-            isFinished = false;
-            p1Shots = 0;
-            p2Shots = 0;
-
-            userManager.updateUserStatus(player1.getUser(), UserStatus.BUSY);
-            userManager.updateUserStatus(player2.getUser(), UserStatus.BUSY);
-
-            Message rematchStartMsg = new Message(MessageType.REMATCH_START);
-            player1.sendMessage(rematchStartMsg);
-            player2.sendMessage(rematchStartMsg);
-        }
-    }
-
-    public boolean isFinished() {
-        return isFinished;
-    }
+    public synchronized boolean hasAgreed(ClientHandler c) { user(c); return c==p1?rematch1:rematch2; }
+    public synchronized void setPostGameTimer(ScheduledFuture<?> future) { postGameTimer=future; }
+    public synchronized void resultSaved(){resultSaved=true;}
+    public synchronized boolean isResultSaved(){return resultSaved;}
+    public synchronized boolean isFinished(){return state==State.FINISHED;}
+    public synchronized State getState(){return state;}
+    public synchronized int getTurnId(){return turnId;}
+    public synchronized int getCurrentPlayer(){return currentPlayer;}
+    public synchronized long getDeadlineMs(){return deadlineMs;}
+    public synchronized long getRematchDeadline(){return rematchDeadline;}
+    public synchronized int getShotCount(){return shots1+shots2;}
+    public synchronized void cancelTimers(){if(timer!=null){timer.cancel(false);timer=null;}if(postGameTimer!=null){postGameTimer.cancel(false);postGameTimer=null;}}
+    public synchronized void cancel(){if(state!=State.FINISHED)state=State.CANCELLED;cancelTimers();}
 }

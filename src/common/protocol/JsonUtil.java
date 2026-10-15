@@ -114,40 +114,44 @@ public class JsonUtil {
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseObject(String json) {
         if (json == null) return new LinkedHashMap<>();
-        Object parsed = parse(json.trim());
+        Object parsed = parse(json);
         if (parsed instanceof Map) {
             return (Map<String, Object>) parsed;
         }
-        return new LinkedHashMap<>();
+        throw new IllegalArgumentException("Expected JSON object");
     }
 
     @SuppressWarnings("unchecked")
     public static List<Object> parseList(String json) {
         if (json == null) return new ArrayList<>();
-        Object parsed = parse(json.trim());
+        Object parsed = parse(json);
         if (parsed instanceof List) {
             return (List<Object>) parsed;
         }
-        return new ArrayList<>();
+        throw new IllegalArgumentException("Expected JSON array");
     }
 
     public static Object parse(String json) {
         if (json == null) return null;
-        json = json.trim();
         if (json.isEmpty()) return null;
-        return new JsonParser(json).parseValue();
+        JsonParser parser = new JsonParser(json);
+        Object value = parser.parseValue();
+        parser.skipWhitespace();
+        if (parser.idx != json.length()) throw new IllegalArgumentException("Trailing JSON data");
+        return value;
     }
 
     private static class JsonParser {
         private final String src;
         private int idx = 0;
+        private int depth = 0;
 
         JsonParser(String src) {
             this.src = src;
         }
 
         private void skipWhitespace() {
-            while (idx < src.length() && Character.isWhitespace(src.charAt(idx))) {
+            while (idx < src.length() && " \t\r\n".indexOf(src.charAt(idx)) >= 0) {
                 idx++;
             }
         }
@@ -165,6 +169,8 @@ public class JsonUtil {
         }
 
         Object parseValue() {
+            if (++depth > 64) throw new IllegalArgumentException("JSON nesting too deep");
+            try {
             char c = peek();
             if (c == '{') return parseObject();
             if (c == '[') return parseArray();
@@ -173,6 +179,7 @@ public class JsonUtil {
             if (c == 'n') return parseNull();
             if (c == '-' || Character.isDigit(c)) return parseNumber();
             throw new IllegalArgumentException("Ký tự JSON không hợp lệ tại vị trí " + idx + ": " + c);
+            } finally { depth--; }
         }
 
         Map<String, Object> parseObject() {
@@ -192,6 +199,7 @@ public class JsonUtil {
                     throw new IllegalArgumentException("Mong đợi ':' sau key tại vị trí " + idx);
                 }
                 Object val = parseValue();
+                if (map.containsKey(key)) throw new IllegalArgumentException("Duplicate JSON key");
                 map.put(key, val);
                 skipWhitespace();
                 char c = next();
@@ -248,11 +256,12 @@ public class JsonUtil {
                                 String hex = src.substring(idx, idx + 4);
                                 idx += 4;
                                 sb.append((char) Integer.parseInt(hex, 16));
-                            }
+                            } else throw new IllegalArgumentException("Invalid unicode escape");
                             break;
-                        default: sb.append(esc);
+                        default: throw new IllegalArgumentException("Invalid escape");
                     }
                 } else {
+                    if (c < 32) throw new IllegalArgumentException("Unescaped control character");
                     sb.append(c);
                 }
             }
@@ -286,8 +295,11 @@ public class JsonUtil {
                 idx++;
             }
             String numStr = src.substring(start, idx);
+            if (!numStr.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?([eE][+-]?[0-9]+)?")) throw new IllegalArgumentException("Invalid number");
             if (numStr.contains(".") || numStr.contains("e") || numStr.contains("E")) {
-                return Double.parseDouble(numStr);
+                double value = Double.parseDouble(numStr);
+                if (Double.isInfinite(value) || Double.isNaN(value)) throw new IllegalArgumentException("Invalid number");
+                return value;
             }
             try {
                 return Integer.parseInt(numStr);
@@ -328,6 +340,11 @@ public class JsonUtil {
         }
     }
 
+    public static long getLong(Map<String,Object> map,String key,long def) {
+        Object value=map==null?null:map.get(key);
+        return value instanceof Number?((Number)value).longValue():def;
+    }
+
     public static boolean getBoolean(Map<String, Object> map, String key, boolean def) {
         if (map == null || !map.containsKey(key) || map.get(key) == null) return def;
         Object val = map.get(key);
@@ -350,4 +367,12 @@ public class JsonUtil {
         if (val instanceof List) return (List<Object>) val;
         return null;
     }
+    public static int requireInt(Map<String, Object> map, String key) {
+        Object val = map == null ? null : map.get(key);
+        if (!(val instanceof Integer) && !(val instanceof Long)) throw new IllegalArgumentException("INVALID_MESSAGE");
+        long n = ((Number) val).longValue();
+        if (n < Integer.MIN_VALUE || n > Integer.MAX_VALUE) throw new IllegalArgumentException("INVALID_MESSAGE");
+        return (int) n;
+    }
+
 }

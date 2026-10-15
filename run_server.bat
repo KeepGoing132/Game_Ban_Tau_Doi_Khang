@@ -1,10 +1,16 @@
 @echo off
 chcp 65001 >nul
-title BATTLESHIP GAME SERVER - TCP PORT 8888
+pushd "%~dp0"
 if not exist "bin\server\ServerMain.class" (
-    echo Chưa biên dịch! Đang tiến hành biên dịch...
-    call compile.bat
+    call "%~dp0compile.bat"
+    if errorlevel 1 (
+        popd
+        exit /b 1
+    )
 )
-echo Đang khởi chạy Battleship Server...
-java -Dfile.encoding=UTF-8 -cp bin server.ServerMain 8888
-pause
+set "BATTLESHIP_PORT=8888"
+if not "%~1"=="" set "BATTLESHIP_PORT=%~1"
+java -Dfile.encoding=UTF-8 -cp "%~dp0bin;%~dp0lib/*" server.ServerMain %BATTLESHIP_PORT%
+set "BATTLESHIP_EXIT=%ERRORLEVEL%"
+popd
+exit /b %BATTLESHIP_EXIT%

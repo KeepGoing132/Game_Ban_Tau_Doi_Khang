@@ -1,5 +1,10 @@
 bin/
+dist/
+references/
+data/*.db
+data/*.db-*
 *.class
 .vscode/
 .idea/
 *.log
+*.bak

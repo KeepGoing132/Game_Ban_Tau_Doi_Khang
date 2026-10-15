@@ -11,65 +11,96 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class UserManager {
     private final StorageManager storageManager;
+    private final ChatManager chat;
+    public ChatManager getChat(){return chat;}
     private final Map<Integer, ClientHandler> activeClients = new ConcurrentHashMap<>();
 
     public UserManager(StorageManager storageManager) {
         this.storageManager = storageManager;
+        this.chat = new ChatManager(this,storageManager);
     }
 
+    private final Object registryLock = new Object();
+    public Object getRegistryLock() { return registryLock; }
+
     public synchronized User login(String username, String password, ClientHandler handler) {
-        if (username == null || username.trim().isEmpty()) return null;
-        username = username.trim();
-
+        if (handler.getUser() != null) throw new DomainException("INVALID_STATE", "Socket đã đăng nhập");
+        if (username == null || !username.trim().matches("[A-Za-z0-9_]{1,32}") || password == null || password.trim().isEmpty() || password.length() > 128)
+            throw new DomainException("AUTH_FAILED", "Tên 1–32 ký tự chữ/số/gạch dưới; mật khẩu không được rỗng");
+        username = username.trim().toLowerCase(Locale.ROOT);
         User user = storageManager.findByUsername(username);
-        if (user == null) {
-            // Tự động tạo tài khoản mới nếu chưa tồn tại
-            user = storageManager.registerUser(username, password);
-        } else {
-            // Kiểm tra mật khẩu (nếu có)
-            if (password != null && !password.isEmpty() && !password.equals(user.getPassword())) {
-                return null;
-            }
-        }
-
-        // Kiểm tra xem tài khoản này đã đăng nhập ở client khác chưa
-        ClientHandler oldHandler = activeClients.get(user.getUserId());
-        if (oldHandler != null && oldHandler != handler) {
-            oldHandler.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Tài khoản của bạn đã được đăng nhập từ nơi khác."));
-            oldHandler.close();
-        }
-
-        user.setStatus(UserStatus.IDLE);
-        activeClients.put(user.getUserId(), handler);
-        handler.setUser(user);
-
-        // Broadcast trạng thái mới của user tới tất cả client đang online
-        broadcastUserStatus(user);
-
+        if (user != null && !PasswordHasher.verify(password, user.getPassword())) throw new DomainException("AUTH_FAILED", "Sai mật khẩu");
+        if (user != null && activeClients.containsKey(user.getUserId())) throw new DomainException("ALREADY_LOGGED_IN", "Tài khoản đang được sử dụng");
+        if (user == null) user = storageManager.registerUser(username, password);
+        boolean blocked=isMatchmakingBlocked(user);
+        user.setStatus(blocked?UserStatus.BUSY:UserStatus.IDLE); user.setPhase(blocked?"COOLDOWN":"IDLE");
+        activeClients.put(user.getUserId(), handler); handler.setUser(user);
         return user;
     }
 
+    public void deleteAccount(ClientHandler handler,String password) {
+        User user=handler.getUser();if(user==null)throw new DomainException("UNAUTHENTICATED");
+        if(!"IDLE".equals(user.getPhase()) && !"COOLDOWN".equals(user.getPhase()))throw new DomainException("INVALID_STATE","Về sảnh trước khi xóa tài khoản");
+        storageManager.deleteAccount(user,password);
+    }
     public synchronized void logout(ClientHandler handler) {
-        if (handler == null || handler.getUser() == null) return;
         User user = handler.getUser();
-        user.setStatus(UserStatus.OFFLINE);
-        activeClients.remove(user.getUserId());
-
-        broadcastUserStatus(user);
-        storageManager.saveUsers();
+        if (user == null || !activeClients.remove(user.getUserId(), handler)) return;
+        user.setStatus(UserStatus.OFFLINE); user.setPhase("OFFLINE");
+        handler.setUser(null); broadcastUserStatus(user);
+    }
+    public void updatePhase(ClientHandler handler, String phase) {
+        if (handler.getUser() == null) return;
+        User u = handler.getUser();
+        if("IDLE".equals(phase) && isMatchmakingBlocked(u))phase="COOLDOWN";
+        u.setPhase(phase);
+        u.setStatus("IDLE".equals(phase) ? UserStatus.IDLE : UserStatus.BUSY);
+        broadcastUserStatus(u);
+    }
+    public void updateUserStatus(User user, UserStatus status) {
+        if (user == null) return;
+        user.setStatus(status); user.setPhase(status.name()); broadcastUserStatus(user);
+    }
+    public Map<String, Object> publicUser(User u) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("user_id",u.getUserId());m.put("username",u.getUsername());
+        m.put("total_points",u.getTotalPoints());m.put("total_wins",u.getTotalWins());
+        m.put("total_games",u.getTotalGames());m.put("win_rate",u.getWinRate());
+        m.put("status",u.getStatus().name());m.put("phase",u.getPhase());
+        m.putAll(storageManager.penaltyInfo(u));return m;
     }
 
-    public void updateUserStatus(User user, UserStatus newStatus) {
-        if (user == null) return;
-        user.setStatus(newStatus);
-        broadcastUserStatus(user);
+    public boolean isMatchmakingBlocked(User user) {
+        Map<String,Object> info=storageManager.penaltyInfo(user);
+        return ((Number)info.get("matchmaking_wait_ms")).longValue()>0 || Boolean.TRUE.equals(info.get("penalty_pending"));
+    }
+
+    public void requireCanMatch(ClientHandler handler) {
+        if(handler==null || handler.getUser()==null)throw new DomainException("INVALID_STATE","Người chơi không trực tuyến");
+        User user=handler.getUser();Map<String,Object> info=storageManager.penaltyInfo(user);
+        long remaining=((Number)info.get("matchmaking_wait_ms")).longValue();
+        if(remaining>0 || Boolean.TRUE.equals(info.get("penalty_pending"))) {
+            info.put("user_id",user.getUserId());
+            String detail=remaining>0?"Chỉ huy "+user.getUsername()+" phải chờ "+((remaining+999)/1000)+" giây do rời trận."
+                    :"Kết quả rời trận đang chờ lưu. Chưa thể ghép trận mới.";
+            throw new DomainException("MATCHMAKING_COOLDOWN",detail).withData(info);
+        }
+        if("COOLDOWN".equals(user.getPhase()))updatePhase(handler,"IDLE");
+    }
+
+    public void refreshExpiredPenalties() {
+        synchronized(registryLock) {
+            for(ClientHandler handler:activeClients.values()) {
+                User user=handler.getUser();
+                if(user!=null && "COOLDOWN".equals(user.getPhase()) && !isMatchmakingBlocked(user))updatePhase(handler,"IDLE");
+            }
+        }
     }
 
     public void broadcastUserStatus(User user) {
+        if(user.getUserId()<0)return;
         Message msg = new Message(MessageType.USER_STATUS_BROADCAST);
-        msg.put("user_id", user.getUserId());
-        msg.put("username", user.getUsername());
-        msg.put("status", user.getStatus().name());
+        msg.setData(publicUser(user));
         broadcast(msg, null);
     }
 
@@ -85,15 +116,7 @@ public class UserManager {
         for (ClientHandler ch : activeClients.values()) {
             User u = ch.getUser();
             if (u != null) {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put("user_id", u.getUserId());
-                map.put("username", u.getUsername());
-                map.put("total_points", u.getTotalPoints());
-                map.put("total_wins", u.getTotalWins());
-                map.put("total_games", u.getTotalGames());
-                map.put("win_rate", u.getWinRate());
-                map.put("status", u.getStatus().name());
-                list.add(map);
+                list.add(publicUser(u));
             }
         }
         return list;
@@ -117,7 +140,10 @@ public class UserManager {
                 return Integer.compare(b.getTotalWins(), a.getTotalWins());
             }
             // Tiêu chí 3: Tỷ lệ thắng giảm dần
-            return Double.compare(b.getWinRate(), a.getWinRate());
+            int rate = Double.compare(b.getTotalGames()==0?0:(double)b.getTotalWins()/b.getTotalGames(), a.getTotalGames()==0?0:(double)a.getTotalWins()/a.getTotalGames());
+            if (rate != 0) return rate;
+            int name = a.getUsername().compareTo(b.getUsername());
+            return name != 0 ? name : Integer.compare(a.getUserId(), b.getUserId());
         });
 
         List<Map<String, Object>> result = new ArrayList<>();

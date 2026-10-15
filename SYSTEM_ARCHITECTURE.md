@@ -1,190 +1,86 @@
-# THIẾT KẾ KIẾN TRÚC HỆ THỐNG (SYSTEM ARCHITECTURE)
+# Kiến trúc Battleship Online
 
-Tài liệu này phác thảo kiến trúc kỹ thuật, mô hình luồng đa nhiệm (concurrency), các thực thể dữ liệu và máy trạng thái (State Machine) của hệ thống Battleship Online.
+Java SE/Swing, TCP JSON UTF-8 theo dòng, SQLite JDBC cho lưu trữ. Server là trọng tài duy nhất giữ bàn cờ bí mật và quyết định mọi thay đổi. Cập nhật 04/10/2026 theo PLAN_GPT_6_1_SOL.md.
 
----
+## Cấu trúc
 
-## 1. MÔ HÌNH TỔNG QUAN HỆ THỐNG (HIGH-LEVEL ARCHITECTURE)
+| Module | Lớp chính và trách nhiệm |
+| --- | --- |
+| Shared | GameConfig; Coordinate/Ship/Board/User/MatchRecord; Message/MessageType/JsonUtil; LineConnection |
+| Kết nối | GameServer nhận tối đa 128 connections, worker pool cố định; ClientHandler parse/schema/auth gate/replay request; LineConnection framing, writer queue và watchdog |
+| Tài khoản | UserManager đăng nhập nguyên tử, một handler sở hữu user; PasswordHasher PBKDF2 có salt, thuật toán/v1/số vòng trong chuỗi hash; presence snapshot |
+| Lobby | LobbyManager room registry, queue, invitation có id/expiry, một thao tác pair dùng chung cho các lối vào trận |
+| Trận | MatchManager membership/session registry và scheduler; MatchSession board, Ready, deadline, lượt, kết thúc và rematch agreement |
+| Storage | StorageManager import legacy, transaction SQLite accounts+matches, chống lặp theo match ID, pending retry |
+| Client | SocketClient quản lý từng generation connection; ClientController state/events; LoginFrame, LobbyFrame, PlacementPanel, BattlePanel, LeaderboardDialog |
 
-Hệ thống hoạt động theo mô hình **Client - Server tập trung (Authoritative Server)**:
-- **Server:** Là trọng tài tối cao. Lưu trữ dữ liệu tài khoản, quản lý danh sách online, điều phối ghép trận, kiểm tra tính hợp lệ của việc đặt tàu và phát bắn, đếm ngược Timer 15s, tính điểm và lưu lịch sử trận đấu.
-- **Client:** Đóng vai trò giao diện hiển thị (UI) và nhận tương tác của người chơi. Client **không bao giờ tự ý quyết định kết quả bắn**; mọi thao tác bắn chỉ gửi tọa độ lên Server và đợi Server thông báo kết quả. Điều này ngăn chặn hoàn toàn gian lận (cheat nhìn trộm tàu đối thủ).
-
-```mermaid
-graph TD
-    subgraph Clients
-        C1["Client 1 (Player A)"]
-        C2["Client 2 (Player B)"]
-        Cn["Client N (Player ...)"]
-    end
-
-    subgraph Server["Game Server (Authoritative TCP)"]
-        LS["TCP ServerSocket Listener (Port: 8888)"]
-        
-        subgraph Handlers["Client Workers"]
-            H1["ClientHandler 1"]
-            H2["ClientHandler 2"]
-            Hn["ClientHandler N"]
-        end
-        
-        subgraph CoreManagers["Core Game Services"]
-            UM["UserManager (Auth, Online State, Leaderboard)"]
-            LM["LobbyManager (Rooms, Matchmaking Queue)"]
-            GM["GameEngine / MatchManager (Turn, Timer, Hit/Miss/Sunk)"]
-            DB[("Database / File Storage (Users, Match History)")]
-        end
-    end
-
-    C1 <-->|TCP JSON Stream| H1
-    C2 <-->|TCP JSON Stream| H2
-    Cn <-->|TCP JSON Stream| Hn
-    LS --> Handlers
-    Handlers <--> CoreManagers
-    CoreManagers <--> DB
-```
-
----
-
-## 2. THIẾT KẾ PHÍA SERVER (SERVER CONCURRENCY & MODULES)
-
-### 2.1. Mô hình Đa luồng (Multi-threading Model)
-- **Main Listener Thread:** Lắng nghe kết nối TCP trên cổng định sẵn (mặc định `8888`). Khi có kết nối mới `accept()`, tạo một `ClientHandler` chạy trên Thread riêng (hoặc cấp phát từ `ExecutorService / ThreadPool`).
-- **ClientHandler Thread:** Mỗi kết nối Client duy trì 1 luồng đọc liên tục từ `InputStream` bằng `readLine()`. Khi nhận được 1 dòng JSON:
-  1. Parse JSON sang đối tượng Message.
-  2. Router/Dispatcher chuyển message tới Service tương ứng (`AuthService`, `LobbyService`, `GameService`).
-  3. Ghi log và trả kết quả phản hồi qua `OutputStream`.
-- **Game Timer Scheduler:** Sử dụng `ScheduledExecutorService` (hoặc Timer) để đếm 15 giây cho mỗi lượt bắn trong các trận đấu đang diễn ra. Khi hết 15s mà người chơi chưa gửi lệnh bắn, Timer kích hoạt cơ chế Timeout (tự động bắn/chuyển lượt).
-
-### 2.2. Các Service & Module cốt lõi
-1. **`UserManager`**:
-   - Quản lý danh sách tài khoản đã đăng ký.
-   - Quản lý các phiên kết nối đang Active (`Map<Integer, ClientHandler> onlineClients`).
-   - Cập nhật và broadcast trạng thái (`IDLE` <-> `BUSY`).
-   - Tính toán và cung cấp Bảng xếp hạng.
-2. **`LobbyManager`**:
-   - Quản lý các phòng chơi tùy biến (`Map<String, Room> activeRooms`).
-   - Tạo Room Code ngẫu nhiên không trùng lặp (ví dụ: chuỗi 6 ký tự `[A-Z0-9]`).
-   - Quản lý hàng chờ ghép trận tự động (`Queue<ClientHandler> matchmakingQueue`).
-3. **`GameManager / MatchSession`**:
-   - Mỗi trận đấu là 1 thực thể `MatchSession` quản lý 2 người chơi.
-   - Lưu trữ 2 bàn cờ bí mật (`Board player1Board`, `Board player2Board`).
-   - Điều khiển lượt bắn (`currentTurnPlayerId`).
-   - Hủy trận và xử thua khi 1 bên ngắt kết nối (`disconnect`) hoặc bấm Thoát.
-4. **`StorageManager`**:
-   - Lưu trữ dữ liệu tài khoản và lịch sử trận đấu (có thể dùng SQLite, MySQL hoặc JSON/File).
-
----
-
-## 3. THIẾT KẾ PHÍA CLIENT (CLIENT ARCHITECTURE)
-
-Client được chia làm 2 tầng rõ ràng:
-1. **Network Layer (Background Thread):**
-   - Duy trì Socket kết nối tới Server.
-   - Luồng đọc (`Reader Thread`) liên tục nhận chuỗi JSON từ Server, giải mã thành event và bắn về UI Layer thông qua Callback hoặc Event Dispatcher.
-   - Hàm `sendMessage(Message msg)` gửi JSON kèm `\n` lên Server.
-2. **UI Layer (Main Thread):**
-   - Đảm bảo các cập nhật giao diện được đẩy về UI Thread (ví dụ trong Java Swing dùng `SwingUtilities.invokeLater()`).
-   - Các màn hình (Screens/Views):
-     - **Login/Register Screen:** Form đăng nhập.
-     - **Lobby Screen:** Danh sách online, nút Tạo phòng, Nhập mã phòng, Tìm trận tự động, Bảng xếp hạng.
-     - **Ship Placement Screen:** Bản đồ 10x10, thao tác kéo thả/click đặt 5 tàu, xoay ngang/dọc, nút Ready.
-     - **Battle Screen:** 2 bàn cờ (Bàn cờ của mình hiển thị tàu + vị trí địch bắn; Bàn cờ đối phương hiển thị sương mù + các điểm mình đã bắn: Hit/Miss/Sunk), thanh hiển thị lượt, đồng hồ đếm ngược 15s.
-     - **Game Over Dialog:** Thông báo Thắng/Thua, nút Chơi lại và nút Thoát.
-
----
-
-## 4. MÁY TRẠNG THÁI (FINITE STATE MACHINE - FSM)
-
-### 4.1. Trạng thái của Người chơi (Player Lifecycle)
+## Trạng thái
 
 ```mermaid
 stateDiagram-v2
     [*] --> OFFLINE
-    OFFLINE --> IDLE : LOGIN_SUCCESS
-    IDLE --> IN_QUEUE : Tham gia ghép trận tự động
-    IN_QUEUE --> IDLE : Hủy hàng chờ
-    IDLE --> IN_ROOM : Tạo phòng / Vào phòng / Nhận lời mời
-    IN_QUEUE --> IN_ROOM : Match Found
-    IN_ROOM --> PLACING_SHIPS : Cả 2 có mặt trong phòng
-    PLACING_SHIPS --> READY_WAITING : Đặt đủ 5 tàu & Bấm Ready
-    READY_WAITING --> IN_BATTLE : Cả 2 cùng Ready
-    
-    state IN_BATTLE {
-        [*] --> MY_TURN : Được chỉ định đi trước
-        [*] --> OPPONENT_TURN : Đối thủ đi trước
-        MY_TURN --> OPPONENT_TURN : Bắn Miss
-        MY_TURN --> MY_TURN : Bắn Hit / Sunk
-        OPPONENT_TURN --> MY_TURN : Đối thủ bắn Miss
-        OPPONENT_TURN --> OPPONENT_TURN : Đối thủ bắn Hit/Sunk
-    }
-    
-    IN_BATTLE --> GAME_OVER : 1 bên chìm hết tàu / Thoát trận
-    GAME_OVER --> PLACING_SHIPS : Cả 2 đồng ý Chơi lại (Rematch)
-    GAME_OVER --> IDLE : Thoát về sảnh
-    IDLE --> OFFLINE : LOGOUT / Đóng app
+    OFFLINE --> IDLE: login
+    OFFLINE --> COOLDOWN: login with active penalty
+    IDLE --> QUEUED: queue
+    QUEUED --> IDLE: cancel
+    IDLE --> IN_ROOM: create
+    IN_ROOM --> IDLE: leave
+    IN_ROOM --> PLACING: join
+    QUEUED --> PLACING: pair
+    IDLE --> PLACING: invite Accept
+    PLACING --> READY_WAITING: valid board + ready
+    READY_WAITING --> PLACING: cancel ready
+    READY_WAITING --> IN_BATTLE: both ready
+    IN_BATTLE --> POST_GAME: complete
+    POST_GAME --> PLACING: both rematch
+    POST_GAME --> IDLE: leave/reject/expiry
+    PLACING --> IDLE: preparation cancelled
+    IN_BATTLE --> COOLDOWN: forfeit + release
+    COOLDOWN --> IDLE: penalty saved and 60 seconds elapsed
 ```
 
----
+Connection mất/logout đưa về OFFLINE sau cleanup, giữ hạn phạt nếu rời trận RUNNING. Đối thủ của người rời trận trở về IDLE. Presence công khai IDLE/BUSY/OFFLINE; phase chi tiết QUEUED/IN_ROOM/PLACING/READY_WAITING/IN_BATTLE/POST_GAME/COOLDOWN. COOLDOWN dùng status BUSY. Match có PLACING/RUNNING/FINISHED/CANCELLED. Ready riêng từng người trong PLACING, RUNNING chỉ được vào một lần.
 
-## 5. CẤU TRÚC DỮ LIỆU CỐT LÕI (CORE DATA MODELS)
+## Khóa và thread
 
-```mermaid
-classDiagram
-    class User {
-        +int userId
-        +String username
-        +int totalPoints
-        +int totalWins
-        +int totalGames
-        +UserStatus status
-        +getWinRate() float
-    }
+`UserManager.getRegistryLock()` là khóa chung của lobby/match membership. Create/join/pair/queue/Accept/leave/rematch/cleanup dùng khóa này; một user không được đồng thời ở nhiều context. Map membership lấy theo handler, cleanup remove bằng tham chiếu đúng session để không xóa ván mới. Login/logout sở hữu một session được bảo vệ bởi UserManager; logout chỉ remove nếu đúng handler.
 
-    class Coordinate {
-        +int x
-        +int y
-        +equals(Object obj) boolean
-    }
+MatchSession dùng monitor riêng cho board, Ready, fire, timeout và kết thúc. Thứ tự khi cần cả hai khóa: registry rồi match. Timer không gọi ngược registry trong khóa match; completion callback được đưa vào scheduler để chạy sau khi nhả khóa. Post-game future kiểm tra phiên cũ, được hủy khi release/rematch. Scheduler hai thread thuộc MatchManager/server, remove-on-cancel; shutdown thu hồi scheduler, workers, listener và toàn bộ sockets.
 
-    class Ship {
-        +String shipType
-        +int size
-        +List~Coordinate~ coordinates
-        +Set~Coordinate~ hitCoordinates
-        +isSunk() boolean
-    }
+Không ghi socket đồng bộ trong khóa nghiệp vụ. Event được serialize thành snapshot trong khóa rồi offer vào hàng đợi connection theo thứ tự; writer riêng thực hiện I/O. Queue đầy hoặc lỗi ghi chỉ đóng socket đó. Watchdog kiểm tra idle và write đang bị chặn bằng nanoTime. Socket đóng trước khi reader thu hồi; cleanup qua một đường idempotent cho logout, EOF, watchdog và lỗi ghi.
 
-    class Board {
-        +int SIZE = 10
-        +List~Ship~ ships
-        +Set~Coordinate~ shotHistory
-        +placeShip(Ship ship) boolean
-        +validateAllShips() boolean
-        +receiveShot(Coordinate c) ShotResult
-        +areAllShipsSunk() boolean
-    }
+Match deadline dùng đồng hồ đơn điệu, turn_id tăng mỗi hành động hợp lệ/timeout. Callback giữ lượt lúc tạo và bị bỏ nếu lượt đã thay. Clock epoch/nano, Random và scheduler có thể inject trong constructor MatchSession để kiểm thử ranh giới mà không phụ thuộc sleep.
 
-    class Room {
-        +String roomCode
-        +User host
-        +User guest
-        +RoomStatus status
-    }
+## Lưu dữ liệu
 
-    class MatchSession {
-        +String matchId
-        +User player1
-        +User player2
-        +Board board1
-        +Board board2
-        +int currentTurnUserId
-        +int turnTimerSeconds
-        +handleFire(int shooterId, Coordinate c) FireResult
-        +surrender(int surrenderUserId)
-    }
+`SqliteStore` là adapter JDBC cho `data/battleship.db`; `StorageManager` giữ giao diện nghiệp vụ và cache tài khoản/kết quả. Mỗi lần ghi mở connection ngắn, prepared statements và một transaction accounts+matches; chỉ cập nhật RAM sau commit. Bật synchronous=FULL, secure_delete=ON và busy timeout. match_id duy nhất chống ghi lặp. Các kiểm thử lỗi ghi vẫn inject tại writeSnapshot (tên giữ tương thích test, hiện thực ghi SQL).
 
-    Board "1" *-- "5" Ship
-    Ship "1" *-- "2..5" Coordinate
-    MatchSession "1" *-- "2" Board
-    MatchSession "1" *-- "2" User
-```
+Lần đầu nhập JSON cũ trong một transaction, giữ ID/hash/điểm/lịch sử/hạn phạt. Marker schema_version chỉ được ghi sau nhập thành công; khởi động sau dùng SQLite. JSON nguồn được giữ nguyên, không ghi tiếp. Mật khẩu là PBKDF2-HMAC-SHA256 có salt. Xóa tài khoản yêu cầu xác thực lại, chỉ ở sảnh; transaction bỏ username/hash, ẩn danh tên trong lịch sử. Một tombstone theo ID duy trì tham chiếu lịch sử và không xuất hiện trong login/xếp hạng.
+
+Hạn phạt rời trận là endedAt+60000, trừ min(3, điểm). Pending chưa lưu vẫn chặn ghép; retry không kéo dài hạn phạt. Kết quả pending ở RAM không bảo đảm qua crash khi database không ghi được. File DB và mọi bản lưu cũ chứa thông tin nhạy cảm cần được quản lý như dữ liệu tài khoản.
+
+## Máy chơi
+
+BotClient là kết nối ảo có ID âm, dùng cùng MatchSession và scheduler với người thật. BotBrain chỉ nhận tọa độ/kết quả bắn công khai; không tham chiếu Board đối phương. EASY ngẫu nhiên, MEDIUM săn ô xen kẽ/ô kề, HARD tính mật độ vị trí tàu hợp lệ. Timer bắn kiểm tra lại session và turn_id trước khi hành động; rời trận/chơi lại/shutdown hủy thao tác cũ. Luyện tập không commit điểm/lịch sử xếp hạng và không áp dụng hình phạt.
+
+## Client và bí mật bàn cờ
+
+Socket connect có timeout 5 giây, reader/heartbeat/writer nằm ngoài EDT. Gửi trên EDT chỉ enqueue; disconnect đóng bất đồng bộ. Mỗi connection có generation, callback cũ bị bỏ ngay ở EDT boundary. Controller bỏ request response đã xử lý và event không thuộc match hiện tại; rematch có previous_match_id để kiểm tra chuyển phiên.
+
+Placement chờ PLACE_SHIPS_RESP rồi Ready; Ready khóa click, cancel chờ ack. Battle chỉ gửi một phát đang chờ, mở lại sau TURN_CHANGE hoặc lỗi bắn; đồng hồ tính từ deadline server trên nanoTime cục bộ, không tự xử thắng/đổi lượt. Game-over và invite dialog không chặn event; invitation tự đóng khi hết hạn. Khi rời/đổi màn hình/mất kết nối, dừng Swing Timer, bỏ listener và đóng dialog/cửa sổ cũ.
+
+Server chỉ phát kết quả ô đã bắn và tọa độ tàu đã chìm, không phát board chưa lộ của đối thủ. Log không in password/hash hoặc traffic chứa board bí mật. TLS không nằm trong phạm vi triển khai hiện tại.
+
+## Lưu trữ và luồng chat
+
+`ClientHandler` định tuyến `CHAT_SEND_REQ`, `CHAT_HISTORY_REQ`, `CHAT_CONVERSATIONS_REQ` đến `ChatManager`. User ID của người gửi/đọc lấy từ session đã đăng nhập. Gửi tin dùng khóa registry để không chuyển nhầm event sang tài khoản khác khi logout/login; mọi truy cập database đi qua monitor của `StorageManager`. Nội dung chỉ gửi tới handler của người nhận, không đi qua broadcast.
+
+`SqliteStore` tự thêm bảng `chat_messages` và index khi mở database hiện có; giữ nguyên bảng tài khoản và kết quả. Cột: `message_id` tự tăng, `sender_id`, `recipient_id`, `body`, `sent_at_ms`, `client_message_id`, `pair_low`, `pair_high`. Unique `(sender_id,client_message_id)` chống lưu trùng, index `(pair_low,pair_high,message_id)` phục vụ lịch sử. Transaction lưu tài khoản/trận không xóa tin nhắn. Mọi giá trị dùng prepared statement; chỉ trả ACK và event sau commit thành công.
+
+Lịch sử chỉ truy vấn cặp `(current_user,peer_id)`, lấy 21 hàng để trả 20 hàng + `has_more`, sắp ID tăng dần phía response. Danh sách 100 cuộc trò chuyện gần nhất chỉ thuộc current user. Không giữ bản sao tên cũ trong bảng tin nhắn: query join accounts, hiển thị tên ẩn danh nếu tài khoản đã xóa. Nội dung tin cũ giữ cho người còn lại, ID người dùng không tái sử dụng.
+
+Client có `ChatController` riêng cho mỗi lần đăng nhập. Cache theo peer và ID tin, tránh trùng khi history và event đến xen kẽ; draft và pending request tách theo cuộc trò chuyện. `ChatPanel` được gắn vào layered pane của cửa sổ hiện tại, thu gọn còn thanh tiêu đề và không thay đổi layout bản đồ. Không block EDT để chờ mạng. Đăng xuất/mất kết nối tháo overlay và xóa cache phiên. Tin chưa đọc là trạng thái của phiên client; lịch sử nội dung nằm trong SQLite, không phụ thuộc cache này.
+
+## Phân công và kiểm chứng
+
+Dương: TCP/xác thực/presence; Bảo: room/queue/invitation; Hải: board/placement/Ready; Khoa: combat/timer/kết quả/xếp hạng. Protocol, storage và tích hợp phối hợp chung. Xem TASKS_AND_MEMBERS.md cho ánh xạ nguồn Word và test, README.md cho chạy/demo và giới hạn đã kiểm chứng.

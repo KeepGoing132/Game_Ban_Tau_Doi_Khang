@@ -4,242 +4,107 @@ import common.config.GameConfig;
 import common.model.Board;
 import common.model.Coordinate;
 import common.model.Ship;
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.util.*;
 import java.util.List;
 
 public class PlacementPanel extends JPanel {
-    public interface ReadyListener {
-        void onReady(List<Ship> ships);
-    }
-
+    public interface ReadyListener { void onReady(List<Ship> ships); }
+    private static final String[] SHIP_IDS={"CARRIER","BATTLESHIP","CRUISER_1","CRUISER_2","DESTROYER"};
+    private static final String[] SHIP_NAMES={"Tàu sân bay","Thiết giáp hạm","Tuần dương I","Tuần dương II","Khu trục hạm"};
+    private static final int[] SHIP_SIZES=GameConfig.SHIP_SIZES;
     private final BoardGridPanel gridPanel;
     private final ReadyListener readyListener;
-
-    private boolean isHorizontal = true;
-    private int currentShipIndex = 0; // 0 to 4
-    private final List<Ship> placedShips = new ArrayList<>();
-    private final JButton btnRotate;
-    private final JButton btnReady;
-    private final JLabel lblInstruction;
-    private final JComboBox<String> cbShips;
-
-    private static final String[] SHIP_IDS = {"CARRIER", "BATTLESHIP", "CRUISER_1", "CRUISER_2", "DESTROYER"};
-    private static final int[] SHIP_SIZES = GameConfig.SHIP_SIZES;
-    private static final String[] SHIP_LABELS = GameConfig.SHIP_NAMES;
+    private final List<Ship> placedShips=new ArrayList<>();
+    private final JComboBox<String> cbShips=new JComboBox<>(SHIP_NAMES);
+    private final JButton[] fleetButtons=new JButton[5];
+    private final JButton btnRotate=Theme.button("Hướng ngang  ↔   [R]",false);
+    private final JButton btnRandom=Theme.button("Xếp ngẫu nhiên",false);
+    private final JButton btnReset=Theme.button("Đặt lại",false);
+    private final JButton btnReady=Theme.button("Sẵn sàng chiến đấu  →",true);
+    private final JButton btnLeave=Theme.button("←  Về sảnh",false);
+    private final JLabel lblInstruction=Theme.label(" ",Theme.FONT_SMALL,Theme.TEXT_MUTED);
+    private final JLabel lblProgress=Theme.label("0 / 5 tàu đã bố trí",Theme.FONT_BOLD,Theme.PRIMARY);
+    private final JLabel lblOpponent=Theme.badge("●  Đối thủ đang bố trí",Theme.TEXT_MUTED);
+    private final JLabel lblMatch=Theme.muted("Bố trí bí mật. Đối thủ không nhìn thấy tàu của bạn.");
+    private final JProgressBar progress=new JProgressBar(0,5);
+    private boolean locked,ready,opponentReady,isHorizontal=true;
+    private int currentShipIndex,hoverX=-1,hoverY=-1;
+    private Runnable cancelReady,leaveListener;
 
     public PlacementPanel(ReadyListener readyListener) {
-        this.readyListener = readyListener;
-        setLayout(new BorderLayout(15, 15));
-        setBackground(Theme.BG_DARK);
-        setBorder(new EmptyBorder(20, 20, 20, 20));
-
-        // Center: Bàn cờ đặt tàu
-        gridPanel = new BoardGridPanel("BỐ TRÍ 5 TÀU CHIẾN (17 Ô)", true);
-        add(gridPanel, BorderLayout.CENTER);
-
-        // East: Bảng điều khiển công cụ đặt tàu
-        JPanel sidePanel = Theme.createCardPanel();
-        sidePanel.setLayout(new BoxLayout(sidePanel, BoxLayout.Y_AXIS));
-        sidePanel.setPreferredSize(new Dimension(320, 500));
-
-        JLabel sideTitle = new JLabel("TRUNG TÂM BỐ TRÍ");
-        sideTitle.setFont(Theme.FONT_TITLE);
-        sideTitle.setForeground(Theme.PRIMARY);
-        sideTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        sidePanel.add(sideTitle);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 15)));
-
-        lblInstruction = new JLabel("<html>Chọn loại tàu, hướng đặt rồi <b>click vào ô bản đồ</b> để đặt tàu:</html>");
-        lblInstruction.setFont(Theme.FONT_REGULAR);
-        lblInstruction.setForeground(Theme.TEXT_MUTED);
-        sidePanel.add(lblInstruction);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        JLabel lblSelect = new JLabel("Chọn loại tàu:");
-        lblSelect.setFont(Theme.FONT_BOLD);
-        lblSelect.setForeground(Theme.TEXT_MAIN);
-        sidePanel.add(lblSelect);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 5)));
-
-        cbShips = new JComboBox<>(SHIP_LABELS);
-        cbShips.setFont(Theme.FONT_REGULAR);
-        cbShips.setBackground(Theme.PANEL_LIGHT);
-        cbShips.setForeground(Theme.TEXT_MAIN);
-        cbShips.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        cbShips.addActionListener(e -> currentShipIndex = cbShips.getSelectedIndex());
-        sidePanel.add(cbShips);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        // Nút xoay hướng
-        btnRotate = new JButton("Hướng: HÀNG NGANG ↔");
-        Theme.styleButton(btnRotate, Theme.PANEL_LIGHT, Theme.TEXT_MAIN);
-        btnRotate.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        btnRotate.addActionListener(e -> {
-            isHorizontal = !isHorizontal;
-            btnRotate.setText("Hướng: " + (isHorizontal ? "HÀNG NGANG ↔" : "HÀNG DỌC ↕"));
-        });
-        sidePanel.add(btnRotate);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 15)));
-
-        // Nút Tự động xếp ngẫu nhiên (Rất tiện lợi cho người chơi)
-        JButton btnRandom = new JButton("🎲 Xếp ngẫu nhiên tự động");
-        Theme.styleButton(btnRandom, Theme.PRIMARY, Color.WHITE);
-        btnRandom.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        btnRandom.addActionListener(e -> randomizePlacement());
-        sidePanel.add(btnRandom);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        // Nút Xóa đặt lại
-        JButton btnReset = new JButton("🔄 Xóa đặt lại từ đầu");
-        Theme.styleButton(btnReset, Theme.PANEL_LIGHT, Theme.TEXT_MUTED);
-        btnReset.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        btnReset.addActionListener(e -> resetPlacement());
-        sidePanel.add(btnReset);
-        sidePanel.add(Box.createRigidArea(new Dimension(0, 20)));
-
-        // Nút Sẵn sàng
-        btnReady = new JButton("✅ BẤM ĐỂ SẴN SÀNG (READY)");
-        Theme.styleSuccessButton(btnReady);
-        btnReady.setEnabled(false);
-        btnReady.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
-        btnReady.addActionListener(e -> {
-            btnReady.setEnabled(false);
-            btnRotate.setEnabled(false);
-            btnRandom.setEnabled(false);
-            btnReset.setEnabled(false);
-            cbShips.setEnabled(false);
-            lblInstruction.setText("<html><b style='color:#10b981;'>ĐÃ SẴN SÀNG!</b> Đang chờ đối thủ đặt tàu...</html>");
-            if (readyListener != null) {
-                readyListener.onReady(new ArrayList<>(placedShips));
-            }
-        });
-        sidePanel.add(btnReady);
-
-        add(sidePanel, BorderLayout.EAST);
-
-        // Click trên bàn cờ để đặt tàu thủ công
-        gridPanel.setCellClickListener((x, y) -> placeCurrentShipAt(x, y));
-    }
-
-    private void placeCurrentShipAt(int x, int y) {
-        int size = SHIP_SIZES[currentShipIndex];
-        String shipId = SHIP_IDS[currentShipIndex];
-
-        // Kiểm tra xem tàu này đã được đặt trước đó chưa -> nếu có thì xóa tàu cũ
-        placedShips.removeIf(s -> s.getId().equals(shipId));
-
-        // Kiểm tra biên
-        if (isHorizontal && x + size > GameConfig.BOARD_SIZE) {
-            JOptionPane.showMessageDialog(this, "Tàu vượt ra ngoài biên ngang!", "Lỗi đặt tàu", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (!isHorizontal && y + size > GameConfig.BOARD_SIZE) {
-            JOptionPane.showMessageDialog(this, "Tàu vượt ra ngoài biên dọc!", "Lỗi đặt tàu", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-
-        List<Coordinate> coords = new ArrayList<>();
-        for (int i = 0; i < size; i++) {
-            coords.add(new Coordinate(isHorizontal ? (x + i) : x, isHorizontal ? y : (y + i)));
-        }
-
-        // Kiểm tra xem có đè lên tàu khác không
-        for (Coordinate c : coords) {
-            for (Ship existing : placedShips) {
-                if (existing.contains(c)) {
-                    JOptionPane.showMessageDialog(this, "Tàu bị chồng lấn lên vị trí tàu khác!", "Lỗi đặt tàu", JOptionPane.WARNING_MESSAGE);
-                    return;
+        this.readyListener=readyListener;setLayout(new BorderLayout(22,18));setBackground(Theme.BG_DARK);setBorder(new EmptyBorder(24,28,24,28));
+        JPanel header=Theme.transparent(new BorderLayout());JPanel heading=Theme.stack();
+        Theme.addStack(heading,Theme.label("Triển khai hạm đội",Theme.FONT_TITLE,Theme.TEXT_MAIN),5);Theme.addStack(heading,lblMatch,0);header.add(heading,BorderLayout.CENTER);
+        JPanel headerActions=Theme.stack();Theme.addStack(headerActions,btnLeave,12);Theme.addStack(headerActions,lblOpponent,0);btnLeave.addActionListener(e->{if(leaveListener!=null){btnLeave.setEnabled(false);leaveListener.run();}});header.add(headerActions,BorderLayout.EAST);add(header,BorderLayout.NORTH);
+        gridPanel=new BoardGridPanel("HẢI PHẬN CỦA BẠN",true);gridPanel.setCaption("Rê chuột để xem trước  •  Nhấn R để xoay tàu");add(gridPanel,BorderLayout.CENTER);
+        JPanel side=Theme.createCardPanel();side.setLayout(new BorderLayout(0,14));side.setPreferredSize(new Dimension(328,0));add(side,BorderLayout.EAST);
+        JPanel fleet=Theme.stack();Theme.addStack(fleet,Theme.label("Biên đội của bạn",Theme.FONT_HEADER,Theme.TEXT_MAIN),6);
+        Theme.addStack(fleet,Theme.muted("Chọn tàu, sau đó chọn vị trí trên bản đồ."),14);
+        cbShips.addActionListener(e->{currentShipIndex=cbShips.getSelectedIndex();refreshFleet();preview(hoverX,hoverY);});
+        for(int i=0;i<5;i++){
+            final int index=i;JButton b=new JButton(){
+                @Override protected void paintComponent(Graphics graphics){
+                    super.paintComponent(graphics);Graphics2D g=Theme.graphics(graphics);g.setColor(locked?Theme.TEXT_MUTED:Theme.PRIMARY);
+                    int start=getWidth()-94;for(int n=0;n<SHIP_SIZES[index];n++)g.fillRoundRect(start+n*13,getHeight()/2-4,10,8,3,3);
+                    if(isPlaced(index)){g.setStroke(new BasicStroke(1.6f));g.drawLine(12,getHeight()/2,15,getHeight()/2+3);g.drawLine(15,getHeight()/2+3,21,getHeight()/2-4);}g.dispose();
                 }
-            }
+            };
+            Theme.styleButton(b,Theme.PANEL_LIGHT,Theme.TEXT_MAIN);b.setFont(Theme.FONT_SMALL);b.setHorizontalAlignment(SwingConstants.LEFT);b.setBorder(new EmptyBorder(13,28,13,105));
+            b.setMaximumSize(new Dimension(Integer.MAX_VALUE,44));b.addActionListener(e->cbShips.setSelectedIndex(index));fleetButtons[i]=b;Theme.addStack(fleet,b,7);
         }
-
-        placedShips.add(new Ship(shipId, size, coords));
-        refreshGridVisuals();
-
-        // Tự động nhảy sang tàu tiếp theo nếu chưa đặt đủ
-        if (currentShipIndex < SHIP_SIZES.length - 1) {
-            currentShipIndex++;
-            cbShips.setSelectedIndex(currentShipIndex);
+        btnRotate.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));btnRotate.addActionListener(e->rotate());Theme.addStack(fleet,btnRotate,12);
+        JPanel tools=Theme.transparent(new GridLayout(1,2,8,0));btnRandom.setFont(Theme.FONT_SMALL);btnReset.setFont(Theme.FONT_SMALL);btnRandom.setBorder(new EmptyBorder(10,8,10,8));btnReset.setBorder(new EmptyBorder(10,8,10,8));btnRandom.addActionListener(e->randomizePlacement());btnReset.addActionListener(e->resetPlacement());tools.add(btnRandom);tools.add(btnReset);tools.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));Theme.addStack(fleet,tools,0);side.add(Theme.scrollPage(fleet,396,Theme.PANEL_BG),BorderLayout.CENTER);
+        JPanel readyArea=Theme.stack();Theme.addStack(readyArea,lblProgress,8);progress.setBorderPainted(false);progress.setForeground(Theme.PRIMARY);progress.setBackground(Theme.PANEL_LIGHT);progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,5));Theme.addStack(readyArea,progress,10);
+        lblInstruction.setPreferredSize(new Dimension(270,44));lblInstruction.setMaximumSize(new Dimension(Integer.MAX_VALUE,44));Theme.addStack(readyArea,lblInstruction,10);
+        btnReady.setMaximumSize(new Dimension(Integer.MAX_VALUE,46));btnReady.addActionListener(e->{if(ready){setPending();if(cancelReady!=null)cancelReady.run();}else{setPending();if(readyListener!=null)readyListener.onReady(new ArrayList<>(placedShips));}});Theme.addStack(readyArea,btnReady,0);side.add(readyArea,BorderLayout.SOUTH);
+        JPanel footer=Theme.transparent(new BorderLayout());footer.add(Theme.muted("05 TÀU  /  17 Ô  /  Không được chồng lấn"),BorderLayout.WEST);add(footer,BorderLayout.SOUTH);
+        gridPanel.setCellClickListener(this::placeCurrentShipAt);gridPanel.setCellHoverListener(this::preview);
+        getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke('r'),"rotate");getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke('R'),"rotate");getActionMap().put("rotate",new AbstractAction(){public void actionPerformed(ActionEvent e){rotate();}});
+        checkReadyCondition();refreshFleet();
+    }
+    public void setMatchInfo(String opponent,Runnable leave){lblMatch.setText("Đối thủ: "+opponent);leaveListener=leave;}
+    public void setCancelReadyListener(Runnable listener){cancelReady=listener;}
+    private void rotate(){if(locked)return;isHorizontal=!isHorizontal;btnRotate.setText(isHorizontal?"Hướng ngang  ↔   [R]":"Hướng dọc  ↕   [R]");preview(hoverX,hoverY);}
+    private boolean canPlace(int x,int y){
+        int size=SHIP_SIZES[currentShipIndex];if(x<0||y<0||x+(isHorizontal?size:1)>10||y+(isHorizontal?1:size)>10)return false;
+        for(int i=0;i<size;i++){Coordinate c=new Coordinate(x+(isHorizontal?i:0),y+(isHorizontal?0:i));for(Ship s:placedShips)if(!s.getId().equals(SHIP_IDS[currentShipIndex])&&s.contains(c))return false;}return true;
+    }
+    private void preview(int x,int y){
+        hoverX=x;hoverY=y;refreshGridVisuals();if(locked||x<0||y<0)return;boolean valid=canPlace(x,y);
+        for(int i=0;i<SHIP_SIZES[currentShipIndex];i++)gridPanel.setCellState(x+(isHorizontal?i:0),y+(isHorizontal?0:i),valid?BoardGridPanel.CellState.PREVIEW_VALID:BoardGridPanel.CellState.PREVIEW_INVALID);
+    }
+    private void placeCurrentShipAt(int x,int y){
+        if(locked)return;if(!canPlace(x,y)){instruction("Vị trí chưa hợp lệ. Tàu cần nằm trong bản đồ và không chồng lấn.",Theme.DANGER);return;}
+        String id=SHIP_IDS[currentShipIndex];List<Coordinate> coords=new ArrayList<>();for(int i=0;i<SHIP_SIZES[currentShipIndex];i++)coords.add(new Coordinate(x+(isHorizontal?i:0),y+(isHorizontal?0:i)));
+        placedShips.removeIf(s->s.getId().equals(id));placedShips.add(new Ship(id,SHIP_SIZES[currentShipIndex],coords));hoverX=hoverY=-1;
+        for(int i=1;i<=5;i++){int next=(currentShipIndex+i)%5;if(!isPlaced(next)){cbShips.setSelectedIndex(next);break;}}
+        refreshGridVisuals();checkReadyCondition();refreshFleet();
+    }
+    private boolean isPlaced(int index){for(Ship s:placedShips)if(s.getId().equals(SHIP_IDS[index]))return true;return false;}
+    private void refreshFleet(){for(int i=0;i<5;i++)if(fleetButtons[i]!=null){JButton b=fleetButtons[i];b.setText(SHIP_NAMES[i]);b.setBackground(i==currentShipIndex?new Color(34,71,76):Theme.PANEL_LIGHT);b.setForeground(i==currentShipIndex?Theme.PRIMARY:Theme.TEXT_MAIN);b.setEnabled(!locked);b.repaint();}}
+    public void randomizePlacement(){
+        if(locked)return;placedShips.clear();Random random=new Random();Set<Coordinate> occupied=new HashSet<>();
+        for(int i=0;i<5;i++)for(int attempt=0;attempt<1000;attempt++){
+            boolean horizontal=random.nextBoolean();int size=SHIP_SIZES[i],x=random.nextInt(horizontal?11-size:10),y=random.nextInt(horizontal?10:11-size);List<Coordinate> coords=new ArrayList<>();
+            for(int n=0;n<size;n++)coords.add(new Coordinate(x+(horizontal?n:0),y+(horizontal?0:n)));if(!Collections.disjoint(occupied,coords))continue;
+            placedShips.add(new Ship(SHIP_IDS[i],size,coords));occupied.addAll(coords);break;
         }
-
-        checkReadyCondition();
+        hoverX=hoverY=-1;refreshGridVisuals();checkReadyCondition();refreshFleet();
     }
-
-    public void randomizePlacement() {
-        placedShips.clear();
-        Random rand = new Random();
-        Set<Coordinate> occupied = new HashSet<>();
-
-        for (int i = 0; i < SHIP_SIZES.length; i++) {
-            int size = SHIP_SIZES[i];
-            String shipId = SHIP_IDS[i];
-            boolean placed = false;
-            int attempts = 0;
-
-            while (!placed && attempts < 500) {
-                attempts++;
-                boolean horiz = rand.nextBoolean();
-                int maxX = horiz ? (GameConfig.BOARD_SIZE - size) : (GameConfig.BOARD_SIZE - 1);
-                int maxY = horiz ? (GameConfig.BOARD_SIZE - 1) : (GameConfig.BOARD_SIZE - size);
-
-                int startX = rand.nextInt(maxX + 1);
-                int startY = rand.nextInt(maxY + 1);
-
-                List<Coordinate> coords = new ArrayList<>();
-                boolean clash = false;
-                for (int s = 0; s < size; s++) {
-                    Coordinate c = new Coordinate(horiz ? (startX + s) : startX, horiz ? startY : (startY + s));
-                    if (occupied.contains(c)) {
-                        clash = true;
-                        break;
-                    }
-                    coords.add(c);
-                }
-
-                if (!clash) {
-                    occupied.addAll(coords);
-                    placedShips.add(new Ship(shipId, size, coords));
-                    placed = true;
-                }
-            }
-        }
-
-        refreshGridVisuals();
-        checkReadyCondition();
-    }
-
-    public void resetPlacement() {
-        placedShips.clear();
-        currentShipIndex = 0;
-        cbShips.setSelectedIndex(0);
-        gridPanel.resetAllCells();
-        btnReady.setEnabled(false);
-        lblInstruction.setText("<html>Chọn loại tàu, hướng đặt rồi <b>click vào ô bản đồ</b> để đặt tàu:</html>");
-    }
-
-    private void refreshGridVisuals() {
-        gridPanel.resetAllCells();
-        for (Ship s : placedShips) {
-            for (Coordinate c : s.getCoordinates()) {
-                gridPanel.setCellState(c.getX(), c.getY(), BoardGridPanel.CellState.SHIP);
-            }
-        }
-    }
-
-    private void checkReadyCondition() {
-        Board tempBoard = new Board();
-        tempBoard.setShips(placedShips);
-        boolean valid = tempBoard.validateAllShips();
-        btnReady.setEnabled(valid);
-        if (valid) {
-            lblInstruction.setText("<html><b style='color:#10b981;'>ĐÃ ĐẶT ĐỦ 5 TÀU HỢP LỆ!</b><br>Nhấn 'SẴN SÀNG' để bắt đầu.</html>");
-        } else {
-            lblInstruction.setText("<html>Còn " + (5 - placedShips.size()) + " tàu chưa được đặt.</html>");
-        }
-    }
+    public void resetPlacement(){if(locked)return;placedShips.clear();hoverX=hoverY=-1;cbShips.setSelectedIndex(0);refreshGridVisuals();checkReadyCondition();refreshFleet();}
+    private void refreshGridVisuals(){gridPanel.resetAllCells();gridPanel.setFleet(placedShips);}
+    private void instruction(String text,Color color){lblInstruction.setText("<html>"+Theme.html(text)+"</html>");lblInstruction.setForeground(color);}
+    private boolean validFleet(){Board board=new Board();board.setShips(placedShips);return board.validateAllShips();}
+    private void checkReadyCondition(){boolean valid=validFleet();btnReady.setEnabled(!locked&&valid);progress.setValue(placedShips.size());lblProgress.setText(placedShips.size()+" / 5 tàu đã bố trí");instruction(valid?"Hạm đội đã hoàn tất. Sẵn sàng khi bạn muốn.":"Còn "+(5-placedShips.size())+" tàu cần được bố trí.",valid?Theme.PRIMARY:Theme.TEXT_MUTED);}
+    private void lockControls(){btnRotate.setEnabled(!locked);btnRandom.setEnabled(!locked);btnReset.setEnabled(!locked);cbShips.setEnabled(!locked);gridPanel.setInteractionEnabled(!locked);refreshFleet();refreshGridVisuals();}
+    public void setServerReady(boolean value){ready=value;locked=value;lockControls();btnReady.setText(value?"Hủy sẵn sàng":"Sẵn sàng chiến đấu  →");btnReady.setEnabled(value||validFleet());if(value)instruction(opponentReady?"Cả hai đã sẵn sàng. Đang vào trận...":"Bạn đã sẵn sàng. Chờ đối thủ hoàn tất.",Theme.PRIMARY);else checkReadyCondition();}
+    public void setPending(){locked=true;lockControls();btnReady.setEnabled(false);btnReady.setText("Đang xác nhận...");instruction("Đang chờ máy chủ xác nhận hạm đội...",Theme.TEXT_MUTED);}
+    public void showPlacementError(String message){setServerReady(false);instruction(message,Theme.DANGER);btnLeave.setEnabled(true);}
+    public void showReadyState(boolean value){opponentReady=value;lblOpponent.setText(value?"●  Đối thủ đã sẵn sàng":"●  Đối thủ đang bố trí");lblOpponent.setForeground(value?Theme.PRIMARY:Theme.TEXT_MUTED);if(ready)instruction(value?"Cả hai đã sẵn sàng. Đang vào trận...":"Bạn đã sẵn sàng. Chờ đối thủ hoàn tất.",Theme.PRIMARY);}
+    public void showLeaveError(){btnLeave.setEnabled(true);}
+    public void showNotice(String text){instruction(text,Theme.WARNING);}
 }

@@ -1,73 +1,56 @@
 package server.network;
 
 import common.config.GameConfig;
-import server.manager.LobbyManager;
-import server.manager.MatchManager;
-import server.manager.StorageManager;
-import server.manager.UserManager;
-
-import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import server.manager.*;
+import java.io.*;
+import java.net.*;
+import java.nio.file.Path;
+import java.util.Set;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class GameServer {
     private final int port;
-    private ServerSocket serverSocket;
-    private volatile boolean running = false;
-    private final ExecutorService threadPool = Executors.newCachedThreadPool();
-
-    private final StorageManager storageManager;
-    private final UserManager userManager;
-    private final MatchManager matchManager;
-    private final LobbyManager lobbyManager;
-
-    public GameServer(int port) {
-        this.port = port;
-        this.storageManager = new StorageManager();
-        this.userManager = new UserManager(storageManager);
-        this.matchManager = new MatchManager(userManager, storageManager);
-        this.lobbyManager = new LobbyManager(userManager, matchManager);
+    private volatile ServerSocket listener;
+    private volatile boolean running;
+    private final AtomicBoolean stopped=new AtomicBoolean();
+    private final ExecutorService workers=Executors.newFixedThreadPool(GameConfig.MAX_CONNECTIONS);
+    private final Set<ClientHandler> connections=ConcurrentHashMap.newKeySet();
+    private final StorageManager storage;
+    private final UserManager users;
+    private final MatchManager matches;
+    private final LobbyManager lobby;
+    public GameServer(int port){this(port,new StorageManager());}
+    public GameServer(int port,Path directory){this(port,new StorageManager(directory));}
+    public GameServer(int port,StorageManager storage) {
+        this.port=port;this.storage=storage;users=new UserManager(storage);matches=new MatchManager(users,storage);lobby=new LobbyManager(users,matches);
     }
-
     public void start() {
         try {
-            serverSocket = new ServerSocket(port);
-            running = true;
-            System.out.println("=================================================");
-            System.out.println("  BATTLESHIP GAME SERVER ĐANG CHẠY TRÊN CỔNG: " + port);
-            System.out.println("  Giao thức: TCP Socket (Line-delimited JSON)");
-            System.out.println("  Chế độ: Đa luồng (Multi-threaded Worker)");
-            System.out.println("=================================================");
-
-            while (running) {
-                try {
-                    Socket clientSocket = serverSocket.accept();
-                    System.out.println("[Server] Có kết nối mới từ: " + clientSocket.getRemoteSocketAddress());
-                    ClientHandler handler = new ClientHandler(clientSocket, userManager, lobbyManager, matchManager);
-                    threadPool.execute(handler);
-                } catch (IOException e) {
-                    if (!running) break;
-                    System.err.println("[Server] Lỗi chấp nhận kết nối: " + e.getMessage());
-                }
+            listener=new ServerSocket(port);running=true;
+            System.out.println("Battleship TCP listening on " + listener.getLocalPort());
+            while(running && !stopped.get()) {
+                Socket socket=listener.accept();
+                if(connections.size()>=GameConfig.MAX_CONNECTIONS){socket.close();continue;}
+                final ClientHandler[] holder=new ClientHandler[1];
+                ClientHandler handler=new ClientHandler(socket,users,lobby,matches,()->connections.remove(holder[0]));holder[0]=handler;
+                connections.add(handler);
+                try {workers.execute(handler);}catch(RejectedExecutionException e){handler.close();}
             }
-        } catch (IOException e) {
-            System.err.println("[Server] Không thể mở cổng " + port + ": " + e.getMessage());
-        } finally {
-            stop();
-        }
+        } catch(IOException e) {if(!stopped.get())throw new IllegalStateException("Cannot listen on port " + port,e);}
+        finally{stop();}
     }
-
+    public int getPort(){ServerSocket s=listener;return s==null?-1:s.getLocalPort();}
+    public int getConnectionCount(){return connections.size();}
+    public StorageManager getStorage(){return storage;}
     public void stop() {
-        running = false;
-        try {
-            if (serverSocket != null && !serverSocket.isClosed()) {
-                serverSocket.close();
-            }
-        } catch (IOException ignored) {
-        }
-        threadPool.shutdownNow();
-        System.out.println("[Server] Server đã dừng.");
+        if(!stopped.compareAndSet(false,true))return;
+        running=false;
+        try{if(listener!=null)listener.close();}catch(IOException ignored){}
+        // Server shutdown cancels sessions before socket cleanup to avoid awarding shutdown wins.
+        matches.shutdown();lobby.shutdown();
+        for(ClientHandler handler:connections)handler.close();
+        workers.shutdownNow();
+        try{workers.awaitTermination(3,TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}
     }
 }

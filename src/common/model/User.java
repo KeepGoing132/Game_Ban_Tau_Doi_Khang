@@ -2,12 +2,21 @@ package common.model;
 
 public class User {
     private int userId;
+    private boolean deleted;
+    public boolean isDeleted(){return deleted;}
+    public void setDeleted(boolean value){deleted=value;}
     private String username;
     private String password;
     private int totalPoints;
     private int totalWins;
     private int totalGames;
-    private UserStatus status = UserStatus.OFFLINE;
+    private volatile long matchmakingBlockedUntil;
+    public long getMatchmakingBlockedUntil() { return matchmakingBlockedUntil; }
+    public void setMatchmakingBlockedUntil(long value) { matchmakingBlockedUntil = value; }
+    private volatile String phase = "OFFLINE";
+    public String getPhase() { return phase; }
+    public void setPhase(String phase) { this.phase = phase; }
+    private volatile UserStatus status = UserStatus.OFFLINE;
 
     public User() {
     }

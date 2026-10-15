@@ -1,141 +1,81 @@
 package server.manager;
 
-import common.model.Coordinate;
-import common.model.Ship;
-import common.model.UserStatus;
-import common.protocol.JsonUtil;
-import common.protocol.Message;
-import common.protocol.MessageType;
+import common.model.*;
+import common.protocol.*;
 import server.model.MatchSession;
 import server.network.ClientHandler;
-
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 
 public class MatchManager {
-    private final UserManager userManager;
-    private final StorageManager storageManager;
-    private final Map<String, MatchSession> activeSessions = new ConcurrentHashMap<>();
-    private final Map<ClientHandler, MatchSession> clientSessionMap = new ConcurrentHashMap<>();
-
-    public MatchManager(UserManager userManager, StorageManager storageManager) {
-        this.userManager = userManager;
-        this.storageManager = storageManager;
+    private final UserManager users;
+    private final StorageManager storage;
+    private final Object lock;
+    private final Map<String,MatchSession> sessions=new ConcurrentHashMap<>();
+    private final Map<ClientHandler,MatchSession> membership=new ConcurrentHashMap<>();
+    private final ScheduledThreadPoolExecutor scheduler=new ScheduledThreadPoolExecutor(2);
+    private LobbyManager lobby;
+    public MatchManager(UserManager users,StorageManager storage){this.users=users;this.storage=storage;lock=users.getRegistryLock();scheduler.setRemoveOnCancelPolicy(true);
+        scheduler.scheduleWithFixedDelay(()->{for(MatchRecord r:storage.retryPending()){MatchSession s=sessions.get(r.getMatchId());if(s!=null)s.resultSaved();for(User u:storage.getAllUsers())if(u.getUserId()==r.getPlayer1Id() || u.getUserId()==r.getPlayer2Id())users.broadcastUserStatus(u);}},1,1,TimeUnit.SECONDS);
+        scheduler.scheduleWithFixedDelay(users::refreshExpiredPenalties,1,1,TimeUnit.SECONDS);
     }
-
-    public synchronized MatchSession createSession(ClientHandler p1, ClientHandler p2) {
-        String matchId = "M_" + System.currentTimeMillis() + "_" + p1.getUser().getUserId() + "_" + p2.getUser().getUserId();
-        MatchSession session = new MatchSession(matchId, p1, p2, userManager, storageManager);
-
-        activeSessions.put(matchId, session);
-        clientSessionMap.put(p1, session);
-        clientSessionMap.put(p2, session);
-
-        return session;
+    public void setLobby(LobbyManager lobby){this.lobby=lobby;}
+    public ScheduledExecutorService scheduler(){return scheduler;}
+    public MatchSession createSession(ClientHandler p1,ClientHandler p2,String roomId){synchronized(lock){
+        users.requireCanMatch(p1);users.requireCanMatch(p2);
+        if(p1==p2 || p1.getUser()==null || p2.getUser()==null || membership.containsKey(p1) || membership.containsKey(p2))throw new DomainException("INVALID_STATE");
+        MatchSession s=new MatchSession("M_"+UUID.randomUUID(),roomId,p1,p2,users,storage,scheduler,()->{});
+        s.setFinishedCallback(()->finished(s));sessions.put(s.getMatchId(),s);membership.put(p1,s);membership.put(p2,s);users.updatePhase(p1,"PLACING");users.updatePhase(p2,"PLACING");return s;
+    }}
+    public MatchSession getSession(ClientHandler client){return membership.get(client);}
+    private MatchSession require(ClientHandler client,Message request){
+        MatchSession s=getSession(client);if(s==null || !s.getMatchId().equals(request.getData().get("match_id")))throw new DomainException("STALE_MATCH","Trận không tồn tại hoặc yêu cầu thuộc ván cũ");return s;
     }
-
-    public MatchSession getSession(ClientHandler client) {
-        return clientSessionMap.get(client);
-    }
-
-    public void handlePlaceShips(ClientHandler client, Message msg) {
-        MatchSession session = getSession(client);
-        if (session == null) {
-            client.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Bạn hiện không ở trong phiên thi đấu nào!"));
-            return;
-        }
-
-        List<Object> shipListRaw = JsonUtil.getList(msg.getData(), "ships");
-        if (shipListRaw == null) {
-            client.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Dữ liệu tàu không hợp lệ!"));
-            return;
-        }
-
-        List<Ship> ships = new ArrayList<>();
-        for (Object item : shipListRaw) {
-            if (item instanceof Map) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> smap = (Map<String, Object>) item;
-                String id = JsonUtil.getString(smap, "id", "SHIP");
-                int size = JsonUtil.getInt(smap, "size", 0);
-                List<Object> coordsRaw = JsonUtil.getList(smap, "coordinates");
-                List<Coordinate> coords = new ArrayList<>();
-                if (coordsRaw != null) {
-                    for (Object cItem : coordsRaw) {
-                        if (cItem instanceof Map) {
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> cmap = (Map<String, Object>) cItem;
-                            int x = JsonUtil.getInt(cmap, "x", 0);
-                            int y = JsonUtil.getInt(cmap, "y", 0);
-                            coords.add(new Coordinate(x, y));
-                        }
-                    }
-                }
-                ships.add(new Ship(id, size, coords));
+    public void handlePlaceShips(ClientHandler client,Message request){
+        MatchSession s=require(client,request);List<Object> raw=JsonUtil.getList(request.getData(),"ships");if(raw==null || raw.size()!=5)throw new DomainException("INVALID_FLEET");
+        List<Ship> ships=new ArrayList<>();Set<String> ids=new HashSet<>();Set<Coordinate> occupied=new HashSet<>();
+        for(Object item:raw){
+            if(!(item instanceof Map))throw new DomainException("INVALID_FLEET");
+            @SuppressWarnings("unchecked") Map<String,Object> map=(Map<String,Object>)item;
+            if(!(map.get("id") instanceof String))throw new DomainException("INVALID_FLEET");String id=(String)map.get("id");
+            if(id.trim().isEmpty() || id.length()>64)throw new DomainException("INVALID_FLEET");if(!ids.add(id))throw new DomainException("DUPLICATE_SHIP_ID");
+            int size=JsonUtil.requireInt(map,"size");List<Object> coordsRaw=JsonUtil.getList(map,"coordinates");if(coordsRaw==null || coordsRaw.size()!=size || size<2 || size>5)throw new DomainException("INVALID_FLEET");
+            List<Coordinate> coords=new ArrayList<>();
+            for(Object c:coordsRaw){if(!(c instanceof Map))throw new DomainException("INVALID_FLEET");@SuppressWarnings("unchecked") Map<String,Object> coord=(Map<String,Object>)c;
+                int x=JsonUtil.requireInt(coord,"x"),y=JsonUtil.requireInt(coord,"y");if(x<0 || x>=10 || y<0 || y>=10)throw new DomainException("OUT_OF_BOUNDS","Tàu " + id + " vượt biên tại (" + x + "," + y + ")");Coordinate point=new Coordinate(x,y);if(!occupied.add(point))throw new DomainException("OVERLAP","Tàu " + id + " trùng ô (" + x + "," + y + ")");coords.add(point);
             }
+            ships.add(new Ship(id,size,coords));
         }
-
-        boolean valid = session.setPlayerShips(client, ships);
-        if (!valid) {
-            client.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Bố trí tàu không hợp lệ! Vui lòng kiểm tra lại kích thước, vị trí và không để tàu đè lên nhau."));
-            return;
-        }
-
-        client.sendMessage(new Message(MessageType.PLACE_SHIPS_REQ, "SUCCESS", "Đã lưu bố trí tàu thành công!"));
+        s.place(client,ships);
     }
-
-    public void handleReady(ClientHandler client) {
-        MatchSession session = getSession(client);
-        if (session == null) return;
-        session.setPlayerReady(client);
+    public void handleReady(ClientHandler client,Message request){
+        Object ready=request.getData().get("ready");if(!(ready instanceof Boolean))throw new IllegalArgumentException();require(client,request).ready(client,(Boolean)ready);
     }
-
-    public void handleFire(ClientHandler client, Message msg) {
-        MatchSession session = getSession(client);
-        if (session == null) return;
-
-        int x = JsonUtil.getInt(msg.getData(), "x", -1);
-        int y = JsonUtil.getInt(msg.getData(), "y", -1);
-        if (x < 0 || x >= 10 || y < 0 || y >= 10) {
-            client.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Tọa độ bắn không hợp lệ!"));
-            return;
-        }
-
-        session.handleFire(client, new Coordinate(x, y));
-    }
-
-    public void handleSurrender(ClientHandler client) {
-        MatchSession session = getSession(client);
-        if (session == null) return;
-        session.surrender(client);
-        cleanupSession(session);
-    }
-
-    public void handleClientDisconnect(ClientHandler client) {
-        MatchSession session = clientSessionMap.remove(client);
-        if (session != null && !session.isFinished()) {
-            session.surrender(client);
-            cleanupSession(session);
+    public void handleFire(ClientHandler client,Message request){MatchSession s=require(client,request);s.fire(client,request,JsonUtil.requireInt(request.getData(),"turn_id"),new Coordinate(JsonUtil.requireInt(request.getData(),"x"),JsonUtil.requireInt(request.getData(),"y")));}
+    private void finished(MatchSession s){
+        synchronized(lock) {
+            if(getSession(s.getPlayer1())!=s || !s.isFinished())return;
+            s.setPostGameTimer(scheduler.schedule(()->{synchronized(lock){if(getSession(s.getPlayer1())==s && s.isFinished())lobby.release(s,"Hết thời gian chờ chơi lại");}},Math.max(0,s.getRematchDeadline()-System.currentTimeMillis()),TimeUnit.MILLISECONDS));
         }
     }
-
-    public void handleRematchReq(ClientHandler client) {
-        MatchSession session = getSession(client);
-        if (session == null) return;
-        session.requestRematch(client);
-    }
-
-    public void handleRematchConfirm(ClientHandler client, Message msg) {
-        MatchSession session = getSession(client);
-        if (session == null) return;
-        boolean accept = JsonUtil.getBoolean(msg.getData(), "accept", false);
-        session.confirmRematch(client, accept);
-    }
-
-    public void cleanupSession(MatchSession session) {
-        if (session == null) return;
-        activeSessions.remove(session.getMatchId());
-        clientSessionMap.remove(session.getPlayer1());
-        clientSessionMap.remove(session.getPlayer2());
-    }
+    public void handleRematch(ClientHandler client,Message request,boolean accept){synchronized(lock){
+        if(accept)users.requireCanMatch(client);
+        MatchSession old=require(client,request);
+        if(!old.isFinished())throw new DomainException("INVALID_STATE");
+        if(!old.isResultSaved())throw new DomainException("STORAGE_ERROR","Kết quả đang chờ lưu; chưa thể chơi lại");
+        boolean already=old.hasAgreed(client);
+        boolean both=accept && old.agreeRematch(client);
+        client.reply(new Message(ClientHandler.responseType(request.getType())).put("match_id",old.getMatchId()).put("accepted",accept));
+        if(!accept){lobby.release(old,"Đối thủ từ chối chơi lại");return;}
+        if(already)return;
+        if(!both){
+            old.getOpponent(client).sendMessage(new Message(MessageType.REMATCH_NOTIFY).put("match_id",old.getMatchId()).put("requester_id",client.getUser().getUserId()).put("expires_at_ms",old.getRematchDeadline()));return;
+        }
+        ClientHandler p1=old.getPlayer1(),p2=old.getPlayer2();
+        if(!p1.isConnected() || !p2.isConnected() || p1.getUser()==null || p2.getUser()==null){lobby.release(old,"Đối thủ đã ngắt kết nối");return;}
+        cleanupSession(old);MatchSession next=createSession(p1,p2,old.getRoomId());
+        Message event=new Message(MessageType.REMATCH_START).put("previous_match_id",old.getMatchId()).put("match_id",next.getMatchId()).put("room_id",next.getRoomId());p1.sendMessage(event);p2.sendMessage(event);
+    }}
+    public void cleanupSession(MatchSession s){synchronized(lock){if(s.getPlayer1() instanceof server.bot.BotClient)((server.bot.BotClient)s.getPlayer1()).cancelShot();if(s.getPlayer2() instanceof server.bot.BotClient)((server.bot.BotClient)s.getPlayer2()).cancelShot();sessions.remove(s.getMatchId(),s);membership.remove(s.getPlayer1(),s);membership.remove(s.getPlayer2(),s);s.cancelTimers();}}
+    public void shutdown(){synchronized(lock){for(MatchSession s:sessions.values())s.cancel();sessions.clear();membership.clear();}scheduler.shutdownNow();}
 }

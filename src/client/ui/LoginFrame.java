@@ -1,159 +1,96 @@
 package client.ui;
 
 import client.controller.ClientController;
-
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 
 public class LoginFrame extends JFrame {
     private final ClientController controller;
-
-    private final JTextField txtHost;
-    private final JTextField txtPort;
-    private final JTextField txtUsername;
-    private final JPasswordField txtPassword;
-    private final JLabel lblStatus;
-    private final JButton btnLogin;
+    private final JTextField txtHost = new JTextField("localhost");
+    private final JTextField txtPort = new JTextField("8888");
+    private final JTextField txtUsername = new JTextField();
+    private final JPasswordField txtPassword = new JPasswordField();
+    private final JLabel lblStatus = Theme.label(" ", Theme.FONT_REGULAR, Theme.TEXT_MUTED);
+    private final JButton btnLogin = Theme.button("Vào phòng chỉ huy  →", true);
+    private final JCheckBox showPassword = new JCheckBox("Hiện mật khẩu");
 
     public LoginFrame(ClientController controller) {
-        super("ĐĂNG NHẬP - BATTLESHIP ONLINE");
+        super("Battleship • Chào mừng chỉ huy");
         this.controller = controller;
-
-        setSize(460, 560);
-        setLocationRelativeTo(null);
+        Theme.configureWindow(this, 1080, 780, 940, 720);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        getContentPane().setBackground(Theme.BG_DARK);
-        setLayout(new BorderLayout());
+        JPanel root = Theme.transparent(new GridLayout(1, 2, 36, 0));
+        root.setBorder(new EmptyBorder(28, 28, 28, 28));
+        setContentPane(root);
+        root.setBackground(Theme.BG_DARK); root.setOpaque(true);
 
-        JPanel container = new JPanel();
-        container.setOpaque(false);
-        container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
-        container.setBorder(new EmptyBorder(30, 40, 30, 40));
+        JPanel hero = Theme.card(Theme.PANEL_BG, 28);
+        hero.setLayout(new BorderLayout(0, 10));
+        JPanel story = Theme.stack();
+        Theme.addStack(story, Theme.label("BATTLESHIP  /  ONLINE", Theme.FONT_BOLD, Theme.PRIMARY), 28);
+        Theme.addStack(story, Theme.label("<html>Làm chủ<br>từng hải phận.</html>", Theme.FONT_TITLE.deriveFont(39f), Theme.TEXT_MAIN), 16);
 
-        // Header Title
-        JLabel lblTitle = new JLabel("⚓ BATTLESHIP ONLINE");
-        lblTitle.setFont(Theme.FONT_TITLE);
-        lblTitle.setForeground(Theme.PRIMARY);
-        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        container.add(lblTitle);
+        hero.add(story, BorderLayout.NORTH);
+        hero.add(new NavalArt(), BorderLayout.CENTER);
+        JPanel facts = Theme.transparent(new GridLayout(1,3,10,0));
+        facts.add(fact("10 × 10", "Ô chiến thuật")); facts.add(fact("05", "Tàu chiến")); facts.add(fact("15s", "Mỗi lượt bắn"));
+        hero.add(facts, BorderLayout.SOUTH); root.add(hero);
 
-        JLabel lblSub = new JLabel("Game Bắn Tàu Đối Kháng Mạng TCP");
-        lblSub.setFont(Theme.FONT_SMALL);
-        lblSub.setForeground(Theme.TEXT_MUTED);
-        lblSub.setAlignmentX(Component.CENTER_ALIGNMENT);
-        container.add(lblSub);
-        container.add(Box.createRigidArea(new Dimension(0, 25)));
-
-        // Form Fields
-        JPanel formCard = Theme.createCardPanel();
-        formCard.setLayout(new GridLayout(4, 2, 10, 15));
-
-        JLabel l1 = new JLabel("Máy chủ (Host):");
-        l1.setFont(Theme.FONT_BOLD);
-        l1.setForeground(Theme.TEXT_MAIN);
-        txtHost = new JTextField("localhost");
-        txtHost.setBackground(Theme.BG_DARK);
-        txtHost.setForeground(Theme.TEXT_MAIN);
-
-        JLabel l2 = new JLabel("Cổng (Port):");
-        l2.setFont(Theme.FONT_BOLD);
-        l2.setForeground(Theme.TEXT_MAIN);
-        txtPort = new JTextField("8888");
-        txtPort.setBackground(Theme.BG_DARK);
-        txtPort.setForeground(Theme.TEXT_MAIN);
-
-        JLabel l3 = new JLabel("Tên tài khoản:");
-        l3.setFont(Theme.FONT_BOLD);
-        l3.setForeground(Theme.TEXT_MAIN);
-        txtUsername = new JTextField("tuan_duong");
-        txtUsername.setBackground(Theme.BG_DARK);
-        txtUsername.setForeground(Theme.TEXT_MAIN);
-
-        JLabel l4 = new JLabel("Mật khẩu:");
-        l4.setFont(Theme.FONT_BOLD);
-        l4.setForeground(Theme.TEXT_MAIN);
-        txtPassword = new JPasswordField("123456");
-        txtPassword.setBackground(Theme.BG_DARK);
-        txtPassword.setForeground(Theme.TEXT_MAIN);
-
-        formCard.add(l1); formCard.add(txtHost);
-        formCard.add(l2); formCard.add(txtPort);
-        formCard.add(l3); formCard.add(txtUsername);
-        formCard.add(l4); formCard.add(txtPassword);
-        container.add(formCard);
-        container.add(Box.createRigidArea(new Dimension(0, 15)));
-
-        // Quick sample account selector
-        JLabel lblQuick = new JLabel("Chọn nhanh tài khoản mẫu để test:");
-        lblQuick.setFont(Theme.FONT_SMALL);
-        lblQuick.setForeground(Theme.TEXT_MUTED);
-        lblQuick.setAlignmentX(Component.CENTER_ALIGNMENT);
-        container.add(lblQuick);
-        container.add(Box.createRigidArea(new Dimension(0, 5)));
-
-        JPanel samplePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 2));
-        samplePanel.setOpaque(false);
-        String[] samples = {"tuan_duong", "ngoc_bao", "thanh_hai", "dang_khoa", "player1", "player2"};
-        for (String sample : samples) {
-            JButton b = new JButton(sample);
-            Theme.styleButton(b, Theme.PANEL_LIGHT, Theme.TEXT_MAIN);
-            b.setFont(Theme.FONT_SMALL);
-            b.addActionListener(e -> txtUsername.setText(sample));
-            samplePanel.add(b);
-        }
-        container.add(samplePanel);
-        container.add(Box.createRigidArea(new Dimension(0, 15)));
-
-        // Login Button
-        btnLogin = new JButton("ĐĂNG NHẬP VÀO GAME");
-        Theme.stylePrimaryButton(btnLogin);
-        btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 45));
-        btnLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
-        btnLogin.addActionListener(e -> performLogin());
-        container.add(btnLogin);
-        container.add(Box.createRigidArea(new Dimension(0, 10)));
-
-        lblStatus = new JLabel(" ", SwingConstants.CENTER);
-        lblStatus.setFont(Theme.FONT_REGULAR);
-        lblStatus.setForeground(Theme.WARNING);
-        lblStatus.setAlignmentX(Component.CENTER_ALIGNMENT);
-        container.add(lblStatus);
-
-        add(container, BorderLayout.CENTER);
+        JPanel form = Theme.stack();
+        Theme.addStack(form, Theme.badge("HẢI CHIẾN ĐỐI KHÁNG  1 vs 1", Theme.PRIMARY), 16);
+        Theme.addStack(form, Theme.label("Đăng nhập", Theme.FONT_TITLE, Theme.TEXT_MAIN), 28);
+        JPanel connection = Theme.transparent(new GridLayout(1,2,12,0));
+        connection.add(loginField("Máy chủ", txtHost)); connection.add(loginField("Cổng kết nối", txtPort));
+        connection.setMaximumSize(new Dimension(Integer.MAX_VALUE,72));Theme.addStack(form, connection, 18);
+        Theme.addStack(form, loginField("Tên chỉ huy", txtUsername), 18);
+        Theme.addStack(form, loginField("Mật khẩu", txtPassword), 12);
+        showPassword.setOpaque(false);showPassword.setForeground(Theme.TEXT_MUTED);showPassword.setFont(Theme.FONT_REGULAR);
+        showPassword.setBorder(BorderFactory.createEmptyBorder());showPassword.setMargin(new Insets(0,0,0,0));
+        final char echo = txtPassword.getEchoChar();
+        showPassword.addActionListener(e -> txtPassword.setEchoChar(showPassword.isSelected() ? (char)0 : echo));
+        Theme.addStack(form, showPassword, 22);
+        btnLogin.setPreferredSize(new Dimension(220,48));
+        btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
+        btnLogin.addActionListener(e -> performLogin());Theme.addStack(form, btnLogin, 10);
+        lblStatus.setPreferredSize(new Dimension(0,48));lblStatus.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
+        lblStatus.setHorizontalAlignment(SwingConstants.LEFT);lblStatus.setVerticalAlignment(SwingConstants.TOP);
+        Theme.addStack(form, lblStatus, 0);
+        JPanel formArea = Theme.transparent(new GridBagLayout());
+        GridBagConstraints constraints = new GridBagConstraints();
+        constraints.weightx=1;constraints.weighty=1;constraints.fill=GridBagConstraints.HORIZONTAL;
+        constraints.insets=new Insets(0,12,0,12);formArea.add(form,constraints);
+        root.add(formArea);getRootPane().setDefaultButton(btnLogin);
+        SwingUtilities.invokeLater(() -> txtUsername.requestFocusInWindow());
     }
-
+    private JPanel loginField(String title,JTextField input) {
+        JPanel field=Theme.field(title,input);
+        for(Component component:field.getComponents())if(component instanceof JLabel)component.setFont(Theme.FONT_REGULAR);
+        input.setFont(Theme.FONT_REGULAR.deriveFont(16f));
+        field.setPreferredSize(new Dimension(180,72));field.setMaximumSize(new Dimension(Integer.MAX_VALUE,72));
+        return field;
+    }
+    private JPanel fact(String value, String title) {
+        JPanel p = Theme.stack();Theme.addStack(p,Theme.label(value,Theme.FONT_HEADER,Theme.TEXT_MAIN),4);
+        Theme.addStack(p,Theme.muted(title),0);return p;
+    }
     private void performLogin() {
-        String host = txtHost.getText().trim();
-        int port = 8888;
-        try {
-            port = Integer.parseInt(txtPort.getText().trim());
-        } catch (NumberFormatException ignored) {
-        }
-        String username = txtUsername.getText().trim();
-        String password = new String(txtPassword.getPassword()).trim();
-
-        if (username.isEmpty()) {
-            lblStatus.setText("Vui lòng nhập tên tài khoản!");
-            lblStatus.setForeground(Theme.DANGER);
-            return;
-        }
-
-        lblStatus.setText("Đang kết nối tới máy chủ...");
-        lblStatus.setForeground(Theme.WARNING);
-        btnLogin.setEnabled(false);
-
-        controller.connectAndLogin(host, port, username, password);
+        if(!btnLogin.isEnabled())return;
+        String host=txtHost.getText().trim(), username=txtUsername.getText().trim();
+        int port;
+        if(host.isEmpty()){showLoginError("Nhập địa chỉ máy chủ để kết nối.");txtHost.requestFocusInWindow();return;}
+        try {port=Integer.parseInt(txtPort.getText().trim());if(port<1||port>65535)throw new NumberFormatException();}
+        catch(NumberFormatException e){showLoginError("Cổng phải là số từ 1 đến 65535.");txtPort.requestFocusInWindow();return;}
+        if(!username.matches("[A-Za-z0-9_]{1,32}")){showLoginError("Tên gồm 1–32 chữ cái, chữ số hoặc dấu gạch dưới.");txtUsername.requestFocusInWindow();return;}
+        char[] password=txtPassword.getPassword();
+        if(password.length==0||password.length>128){java.util.Arrays.fill(password,'\0');showLoginError("Mật khẩu cần có từ 1 đến 128 ký tự.");txtPassword.requestFocusInWindow();return;}
+        setBusy(true);lblStatus.setForeground(Theme.PRIMARY);lblStatus.setText("Đang kết nối đến hạm đội...");
+        controller.connectAndLogin(host,port,username,new String(password));java.util.Arrays.fill(password,'\0');
     }
-
-    public void showLoginError(String error) {
-        lblStatus.setText(error);
-        lblStatus.setForeground(Theme.DANGER);
-        btnLogin.setEnabled(true);
+    private void setBusy(boolean busy) {
+        btnLogin.setEnabled(!busy);btnLogin.setText(busy?"Đang kết nối...":"Vào phòng chỉ huy  →");
+        txtHost.setEnabled(!busy);txtPort.setEnabled(!busy);txtUsername.setEnabled(!busy);txtPassword.setEnabled(!busy);showPassword.setEnabled(!busy);
     }
-
-    public void reset() {
-        lblStatus.setText(" ");
-        btnLogin.setEnabled(true);
-    }
+    public void showLoginError(String error) {setBusy(false);lblStatus.setText("<html>"+Theme.html(error)+"</html>");lblStatus.setForeground(Theme.DANGER);}
+    public void reset() {setBusy(false);lblStatus.setText(" ");}
 }

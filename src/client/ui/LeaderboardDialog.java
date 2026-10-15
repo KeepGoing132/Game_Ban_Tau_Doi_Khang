@@ -1,99 +1,36 @@
 package client.ui;
 
 import common.protocol.JsonUtil;
-
 import javax.swing.*;
-import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.util.List;
 import java.util.Map;
 
 public class LeaderboardDialog extends JDialog {
-
-    public LeaderboardDialog(Frame parent, List<Object> leaderboardData) {
-        super(parent, "BẢNG XẾP HẠNG TOÀN HỆ THỐNG", true);
-        setSize(650, 450);
-        setLocationRelativeTo(parent);
-        getContentPane().setBackground(Theme.BG_DARK);
-        setLayout(new BorderLayout(10, 10));
-
-        // Header
-        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-        headerPanel.setBackground(Theme.BG_DARK);
-        JLabel title = new JLabel("🏆 BẢNG XẾP HẠNG ANH HÙNG HẢI CHIẾN 🏆");
-        title.setFont(Theme.FONT_TITLE);
-        title.setForeground(Theme.WARNING);
-        headerPanel.add(title);
-        add(headerPanel, BorderLayout.NORTH);
-
-        // Table
-        String[] columns = {"Hạng", "Tên người chơi", "Tổng điểm", "Số trận thắng", "Tổng số trận", "Tỷ lệ thắng"};
-        DefaultTableModel model = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-
-        if (leaderboardData != null) {
-            for (Object obj : leaderboardData) {
-                if (obj instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> map = (Map<String, Object>) obj;
-                    int rank = JsonUtil.getInt(map, "rank", 0);
-                    String rankDisplay;
-                    if (rank == 1) rankDisplay = "🥇 1";
-                    else if (rank == 2) rankDisplay = "🥈 2";
-                    else if (rank == 3) rankDisplay = "🥉 3";
-                    else rankDisplay = String.valueOf(rank);
-
-                    String username = JsonUtil.getString(map, "username", "");
-                    int pts = JsonUtil.getInt(map, "total_points", 0);
-                    int wins = JsonUtil.getInt(map, "total_wins", 0);
-                    int games = JsonUtil.getInt(map, "total_games", 0);
-                    double winRate = JsonUtil.getDouble(map, "win_rate", 0.0);
-
-                    model.addRow(new Object[]{
-                            rankDisplay,
-                            username,
-                            pts + " pts",
-                            wins + " trận",
-                            games + " trận",
-                            winRate + "%"
-                    });
-                }
-            }
+    public LeaderboardDialog(Frame parent,List<Object> data) {
+        super(parent,"Battleship • Bảng xếp hạng",true);setSize(830,610);setMinimumSize(new Dimension(720,500));setLocationRelativeTo(parent);
+        JPanel root=Theme.transparent(new BorderLayout(0,22));root.setOpaque(true);root.setBackground(Theme.BG_DARK);root.setBorder(new EmptyBorder(28,28,24,28));setContentPane(root);
+        JPanel top=Theme.stack();Theme.addStack(top,Theme.heading("HỒ SƠ CHỈ HUY", "Bảng vàng hải chiến", "Mỗi chiến thắng là một bước tiến. Mỗi chỉ huy là một chiến lược."),22);
+        JPanel podium=Theme.transparent(new GridLayout(1,3,12,0));
+        for(int i=0;i<3;i++) {
+            Map<String,Object> m=null;if(data!=null&&i<data.size()&&data.get(i) instanceof Map){@SuppressWarnings("unchecked") Map<String,Object> entry=(Map<String,Object>)data.get(i);m=entry;}
+            JPanel card=Theme.card(Theme.PANEL_BG,16);card.setLayout(new BorderLayout(0,8));Color accent=i==0?Theme.WARNING:i==1?Theme.PRIMARY:Theme.TEXT_MUTED;
+            card.add(Theme.label("0"+(i+1)+"  /  "+(i==0?"DẪN ĐẦU":"CHỈ HUY"),Theme.FONT_SMALL,accent),BorderLayout.NORTH);
+            JLabel name=Theme.label(m==null?"Chờ chỉ huy":JsonUtil.getString(m,"username",""),Theme.FONT_HEADER,Theme.TEXT_MAIN);card.add(name,BorderLayout.CENTER);
+            card.add(Theme.muted(m==null?"Hãy ghi dấu ấn của bạn":JsonUtil.getInt(m,"total_points",0)+" điểm  •  "+JsonUtil.getInt(m,"total_wins",0)+" trận thắng"),BorderLayout.SOUTH);podium.add(card);
         }
-
-        JTable table = new JTable(model);
-        table.setFont(Theme.FONT_REGULAR);
-        table.setRowHeight(32);
-        table.setBackground(Theme.PANEL_BG);
-        table.setForeground(Theme.TEXT_MAIN);
-        table.setGridColor(Theme.PANEL_LIGHT);
-        table.getTableHeader().setFont(Theme.FONT_BOLD);
-        table.getTableHeader().setBackground(Theme.PANEL_LIGHT);
-        table.getTableHeader().setForeground(Theme.TEXT_MAIN);
-
-        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
-        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
-        for (int i = 0; i < table.getColumnCount(); i++) {
-            table.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
-        }
-
-        JScrollPane scrollPane = new JScrollPane(table);
-        scrollPane.getViewport().setBackground(Theme.BG_DARK);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
-        add(scrollPane, BorderLayout.CENTER);
-
-        // Bottom
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        bottomPanel.setBackground(Theme.BG_DARK);
-        JButton closeBtn = new JButton("Đóng");
-        Theme.styleButton(closeBtn, Theme.PANEL_LIGHT, Theme.TEXT_MAIN);
-        closeBtn.addActionListener(e -> dispose());
-        bottomPanel.add(closeBtn);
-        add(bottomPanel, BorderLayout.SOUTH);
+        podium.setMaximumSize(new Dimension(Integer.MAX_VALUE,110));Theme.addStack(top,podium,0);root.add(top,BorderLayout.NORTH);
+        DefaultTableModel model=new DefaultTableModel(new String[]{"Hạng","Chỉ huy","Điểm","Thắng","Số trận","Tỷ lệ thắng"},0){public boolean isCellEditable(int r,int c){return false;}};
+        if(data!=null)for(Object item:data)if(item instanceof Map){@SuppressWarnings("unchecked") Map<String,Object> m=(Map<String,Object>)item;model.addRow(new Object[]{String.format("%02d",JsonUtil.getInt(m,"rank",0)),JsonUtil.getString(m,"username",""),JsonUtil.getInt(m,"total_points",0),JsonUtil.getInt(m,"total_wins",0),JsonUtil.getInt(m,"total_games",0),String.format(java.util.Locale.ROOT,"%.1f%%",JsonUtil.getDouble(m,"win_rate",0))});}
+        JTable table=new JTable(model);Theme.styleTable(table);table.getColumnModel().getColumn(1).setPreferredWidth(200);
+        table.getColumnModel().getColumn(0).setCellRenderer(new DefaultTableCellRenderer(){
+            public Component getTableCellRendererComponent(JTable t,Object v,boolean s,boolean f,int r,int c){super.getTableCellRendererComponent(t,v,s,f,r,c);setFont(Theme.FONT_BOLD);setForeground(r<3?Theme.WARNING:Theme.TEXT_MUTED);setBackground(s?Theme.PANEL_LIGHT:Theme.PANEL_BG);setBorder(new EmptyBorder(0,12,0,12));return this;}
+        });
+        JPanel tableCard=Theme.card(Theme.PANEL_BG,10);tableCard.setLayout(new BorderLayout());tableCard.add(Theme.scroll(table));root.add(tableCard,BorderLayout.CENTER);
+        JPanel footer=Theme.transparent(new BorderLayout());footer.add(Theme.muted("Thắng +3 điểm  •  Thống kê từ các trận đã hoàn tất"),BorderLayout.WEST);JButton close=Theme.button("Trở về sảnh",false);close.addActionListener(e->dispose());footer.add(close,BorderLayout.EAST);root.add(footer,BorderLayout.SOUTH);
+        getRootPane().registerKeyboardAction(e->dispose(),KeyStroke.getKeyStroke("ESCAPE"),JComponent.WHEN_IN_FOCUSED_WINDOW);
     }
 }

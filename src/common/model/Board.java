@@ -56,12 +56,15 @@ public class Board {
 
         List<Integer> expectedSizes = new ArrayList<>(Arrays.asList(5, 4, 3, 3, 2));
         List<Integer> actualSizes = new ArrayList<>();
+        Set<String> ids = new HashSet<>();
         Set<Coordinate> occupiedCells = new HashSet<>();
 
         for (Ship ship : ships) {
+            if (ship == null || ship.getId() == null || ship.getId().trim().isEmpty() || !ids.add(ship.getId())) return false;
             if (ship.getCoordinates() == null || ship.getCoordinates().size() != ship.getSize()) {
                 return false;
             }
+            if (ship.getCoordinates().contains(null)) return false;
             actualSizes.add(ship.getSize());
 
             // Kiểm tra tọa độ và tính thẳng hàng

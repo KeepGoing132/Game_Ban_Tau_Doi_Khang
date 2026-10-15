@@ -9,7 +9,11 @@ public class ServerMain {
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
-            } catch (NumberFormatException ignored) {
+                if(port<0 || port>65535)throw new NumberFormatException();
+            } catch (NumberFormatException invalid) {
+                System.err.println("Usage: server.ServerMain [port 0..65535]");
+                System.exit(1);
+                return;
             }
         }
 

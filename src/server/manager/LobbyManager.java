@@ -1,218 +1,131 @@
 package server.manager;
 
-import common.model.UserStatus;
-import common.protocol.Message;
-import common.protocol.MessageType;
-import server.model.Room;
+import common.config.GameConfig;
+import common.protocol.*;
+import server.model.*;
 import server.network.ClientHandler;
-
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.*;
 
 public class LobbyManager {
-    private final UserManager userManager;
-    private final MatchManager matchManager;
-
-    private final Map<String, Room> activeRooms = new ConcurrentHashMap<>();
-    private final Map<ClientHandler, Room> clientRoomMap = new ConcurrentHashMap<>();
-    private final Queue<ClientHandler> matchmakingQueue = new ConcurrentLinkedQueue<>();
-
-    public LobbyManager(UserManager userManager, MatchManager matchManager) {
-        this.userManager = userManager;
-        this.matchManager = matchManager;
+    private final UserManager users;
+    private final MatchManager matches;
+    private final Object lock;
+    private final Map<String,Room> rooms=new HashMap<>();
+    private final Map<ClientHandler,Room> membership=new HashMap<>();
+    private final Deque<ClientHandler> queue=new ArrayDeque<>();
+    private final Map<String,Invitation> invitations=new HashMap<>();
+    private static final class Invitation {
+        final String id=UUID.randomUUID().toString();final ClientHandler sender,receiver;final long expires=System.currentTimeMillis()+GameConfig.INVITE_TIMEOUT_MS;
+        ScheduledFuture<?> timeout;
+        Invitation(ClientHandler sender,ClientHandler receiver){this.sender=sender;this.receiver=receiver;}
     }
-
-    // ==========================================
-    // ROOM MANAGEMENT
-    // ==========================================
-
-    public synchronized String createRoom(ClientHandler host) {
-        leaveCurrentRoom(host);
-        removeFromQueue(host);
-
-        String roomCode = generateRoomCode();
-        Room room = new Room(roomCode, host);
-        activeRooms.put(roomCode, room);
-        clientRoomMap.put(host, room);
-
-        userManager.updateUserStatus(host.getUser(), UserStatus.BUSY);
-        return roomCode;
-    }
-
-    public synchronized boolean joinRoom(String roomCode, ClientHandler guest) {
-        if (roomCode == null) return false;
-        roomCode = roomCode.trim().toUpperCase();
-
-        Room room = activeRooms.get(roomCode);
-        if (room == null || room.isFull() || room.getStatus() != Room.RoomStatus.WAITING) {
-            return false;
-        }
-
-        leaveCurrentRoom(guest);
-        removeFromQueue(guest);
-
-        room.setGuest(guest);
-        room.setStatus(Room.RoomStatus.IN_GAME);
-        clientRoomMap.put(guest, room);
-
-        userManager.updateUserStatus(guest.getUser(), UserStatus.BUSY);
-
-        // Thông báo cho cả 2 người trong phòng
-        Message joinedMsg = new Message(MessageType.ROOM_USER_JOINED);
-        joinedMsg.put("room_code", roomCode);
-        joinedMsg.put("host_id", room.getHost().getUser().getUserId());
-        joinedMsg.put("host_name", room.getHost().getUser().getUsername());
-        joinedMsg.put("guest_id", guest.getUser().getUserId());
-        joinedMsg.put("guest_name", guest.getUser().getUsername());
-
-        room.getHost().sendMessage(joinedMsg);
-        guest.sendMessage(joinedMsg);
-
-        // Bắt đầu phiên chuẩn bị đặt tàu
-        matchManager.createSession(room.getHost(), guest);
-
-        return true;
-    }
-
-    public synchronized void leaveCurrentRoom(ClientHandler client) {
-        if (client == null) return;
-        Room room = clientRoomMap.remove(client);
-        if (room != null) {
-            ClientHandler opponent = room.getOpponent(client);
-            activeRooms.remove(room.getRoomCode());
-
-            if (opponent != null) {
-                clientRoomMap.remove(opponent);
-                userManager.updateUserStatus(opponent.getUser(), UserStatus.IDLE);
-                opponent.sendMessage(new Message(MessageType.ROOM_USER_LEFT, "SUCCESS", "Đối thủ đã rời khỏi phòng"));
-            }
-
-            userManager.updateUserStatus(client.getUser(), UserStatus.IDLE);
+    public LobbyManager(UserManager users,MatchManager matches){this.users=users;this.matches=matches;lock=users.getRegistryLock();matches.setLobby(this);}
+    private boolean online(ClientHandler c){return c!=null && c.isConnected() && c.getUser()!=null && users.getClientById(c.getUser().getUserId())==c;}
+    private boolean free(ClientHandler c){return online(c) && !membership.containsKey(c) && !queue.contains(c) && matches.getSession(c)==null && "IDLE".equals(c.getUser().getPhase());}
+    private void requireFree(ClientHandler c){users.requireCanMatch(c);if(!free(c))throw new DomainException("INVALID_STATE","Bạn đang ở hàng chờ/phòng/trận khác");}
+    private String code(){String code;do{code=UUID.randomUUID().toString().replace("-","").substring(0,6).toUpperCase(Locale.ROOT);}while(rooms.containsKey(code));return code;}
+    public void startBotMatch(ClientHandler human,String difficulty) {synchronized(lock){
+        requireFree(human);server.bot.BotBrain.Difficulty level;
+        try{level=server.bot.BotBrain.Difficulty.valueOf(difficulty);}catch(IllegalArgumentException e){throw new DomainException("INVALID_MESSAGE","Chọn mức Dễ, Vừa hoặc Khó");}
+        invalidate(human);server.bot.BotClient bot=new server.bot.BotClient(users,matches,level);
+        MatchSession session=matches.createSession(human,bot,"PRACTICE_"+UUID.randomUUID());
+        human.reply(new Message(MessageType.BOT_MATCH_RESP));
+        human.sendMessage(new Message(MessageType.MATCH_FOUND).put("room_id",session.getRoomId()).put("match_id",session.getMatchId()).put("opponent_id",bot.getUser().getUserId()).put("opponent_name",bot.getUser().getUsername()).put("practice",true));
+        matches.scheduler().execute(()->bot.prepare(session));
+    }}
+    public String createRoom(ClientHandler host){synchronized(lock){
+        requireFree(host);invalidate(host);
+        Room room=new Room(code(),host);rooms.put(room.getRoomCode(),room);membership.put(host,room);users.updatePhase(host,"IN_ROOM");
+        host.reply(new Message(MessageType.CREATE_ROOM_RESP).put("room_code",room.getRoomCode()).put("room_id",room.getRoomCode()));return room.getRoomCode();
+    }}
+    public boolean joinRoom(String code,ClientHandler guest){synchronized(lock){
+        users.requireCanMatch(guest);
+        Room room=rooms.get(code.trim().toUpperCase(Locale.ROOT));
+        if(room==null)throw new DomainException("ROOM_NOT_FOUND","Không tìm thấy mã phòng");
+        if(room.getHost()==guest)throw new DomainException("INVALID_STATE","Không thể vào phòng của chính mình");
+        if(room.isFull())throw new DomainException("ROOM_FULL","Phòng đã đầy");
+        requireFree(guest);if(!online(room.getHost()))throw new DomainException("ROOM_NOT_FOUND");users.requireCanMatch(room.getHost());
+        room.setGuest(guest);room.setStatus(Room.RoomStatus.IN_GAME);membership.put(guest,room);
+        MatchSession session=matches.createSession(room.getHost(),guest,room.getRoomCode());
+        invalidate(guest);invalidate(room.getHost());
+        guest.reply(new Message(MessageType.JOIN_ROOM_RESP).put("room_id",room.getRoomCode()).put("match_id",session.getMatchId()));
+        Message event=new Message(MessageType.ROOM_USER_JOINED).put("room_code",room.getRoomCode()).put("room_id",room.getRoomCode()).put("match_id",session.getMatchId())
+            .put("host_id",room.getHost().getUser().getUserId()).put("host_name",room.getHost().getUser().getUsername()).put("guest_id",guest.getUser().getUserId()).put("guest_name",guest.getUser().getUsername());
+        room.getHost().sendMessage(event);guest.sendMessage(event);return true;
+    }}
+    private void pair(ClientHandler p1,ClientHandler p2,MessageType type,String invitationId){
+        users.requireCanMatch(p1);users.requireCanMatch(p2);
+        if(p1==p2 || !online(p1) || !online(p2) || membership.containsKey(p1) || membership.containsKey(p2) || matches.getSession(p1)!=null || matches.getSession(p2)!=null)throw new DomainException("INVALID_STATE");
+        Room room=new Room(code(),p1);room.setGuest(p2);room.setStatus(Room.RoomStatus.IN_GAME);
+        rooms.put(room.getRoomCode(),room);membership.put(p1,room);membership.put(p2,room);
+        MatchSession session=matches.createSession(p1,p2,room.getRoomCode());
+        invalidate(p1);invalidate(p2);
+        for(ClientHandler player:Arrays.asList(p1,p2)) {
+            ClientHandler opponent=player==p1?p2:p1;
+            Message event=new Message(type).put("room_id",room.getRoomCode()).put("match_id",session.getMatchId()).put("opponent_id",opponent.getUser().getUserId()).put("opponent_name",opponent.getUser().getUsername());
+            if(invitationId!=null)event.put("invitation_id",invitationId);
+            player.sendMessage(event);
         }
     }
-
-    private String generateRoomCode() {
-        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-        Random random = new Random();
-        String code;
-        do {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 6; i++) {
-                sb.append(chars.charAt(random.nextInt(chars.length())));
-            }
-            code = sb.toString();
-        } while (activeRooms.containsKey(code));
-        return code;
+    public void joinMatchmaking(ClientHandler client){synchronized(lock){
+        users.requireCanMatch(client);
+        if(queue.contains(client)){client.reply(new Message(MessageType.QUEUE_JOIN_RESP));return;}
+        requireFree(client);invalidate(client);queue.addLast(client);users.updatePhase(client,"QUEUED");client.reply(new Message(MessageType.QUEUE_JOIN_RESP));
+        queue.removeIf(c->!online(c));
+        while(queue.size()>=2){ClientHandler p1=queue.removeFirst(),p2=queue.removeFirst();pair(p1,p2,MessageType.MATCH_FOUND,null);}
+    }}
+    public void removeFromQueue(ClientHandler client){synchronized(lock){if(queue.remove(client) && online(client))users.updatePhase(client,"IDLE");}}
+    public void handleInvite(ClientHandler sender,int targetId){synchronized(lock){
+        ClientHandler receiver=users.getClientById(targetId);
+        if(sender==receiver)throw new DomainException("INVALID_STATE","Không thể tự mời mình");
+        requireFree(sender);requireFree(receiver);
+        long count=invitations.values().stream().filter(i->i.sender==sender).count();if(count>=16)throw new DomainException("INVALID_STATE","Quá nhiều lời mời đang chờ");
+        Invitation invitation=new Invitation(sender,receiver);invitations.put(invitation.id,invitation);
+        sender.reply(new Message(MessageType.INVITE_RESP).put("invitation_id",invitation.id).put("expires_at_ms",invitation.expires));
+        receiver.sendMessage(new Message(MessageType.INVITE_NOTIFY).put("invitation_id",invitation.id).put("expires_at_ms",invitation.expires).put("inviter_id",sender.getUser().getUserId()).put("inviter_name",sender.getUser().getUsername()).put("inviter_points",sender.getUser().getTotalPoints()));
+        invitation.timeout=matches.scheduler().schedule(()->{synchronized(lock){if(invitations.remove(invitation.id,invitation))notifyExpired(invitation);}},GameConfig.INVITE_TIMEOUT_MS,TimeUnit.MILLISECONDS);
+    }}
+    private void notifyExpired(Invitation i){Message event=Message.error(MessageType.INVITE_RESULT,"Lời mời đã hết hạn hoặc bị hủy").errorCode("INVITE_EXPIRED").put("invitation_id",i.id).put("expires_at_ms",i.expires);i.sender.sendMessage(event);i.receiver.sendMessage(event);}
+    private void invalidate(ClientHandler c){
+        for(Invitation i:new ArrayList<>(invitations.values()))if(i.sender==c || i.receiver==c){invitations.remove(i.id);if(i.timeout!=null)i.timeout.cancel(false);notifyExpired(i);}
     }
-
-    // ==========================================
-    // AUTO MATCHMAKING (QUICK MATCH)
-    // ==========================================
-
-    public synchronized void joinMatchmaking(ClientHandler client) {
-        leaveCurrentRoom(client);
-        if (!matchmakingQueue.contains(client)) {
-            matchmakingQueue.add(client);
+    public void handleInviteResponse(ClientHandler receiver,Message request){synchronized(lock){
+        String id=JsonUtil.getString(request.getData(),"invitation_id","");Invitation i=invitations.get(id);
+        if(i==null || i.receiver!=receiver || System.currentTimeMillis()>=i.expires)throw new DomainException("INVITE_EXPIRED","Lời mời không tồn tại hoặc đã hết hạn");
+        Object accept=request.getData().get("accept");if(!(accept instanceof Boolean))throw new IllegalArgumentException();
+        if((Boolean)accept){requireFree(receiver);requireFree(i.sender);}
+        invitations.remove(id);i.timeout.cancel(false);
+        receiver.reply(new Message(MessageType.INVITE_RESULT).put("invitation_id",id).put("expires_at_ms",i.expires).put("accepted",accept));
+        if(!(Boolean)accept){i.sender.sendMessage(new Message(MessageType.INVITE_RESULT,"SUCCESS","Đối thủ từ chối lời mời").put("invitation_id",id).put("accepted",false));return;}
+        pair(i.sender,receiver,MessageType.INVITE_RESULT,id);
+    }}
+    public void leave(ClientHandler client,Message request,String reason){synchronized(lock){
+        MatchSession session=matches.getSession(client);Room room=membership.get(client);
+        if(session!=null && !session.getMatchId().equals(request.getData().get("match_id")))throw new DomainException("STALE_MATCH");
+        if(session==null && room!=null && !room.getRoomCode().equals(request.getData().get("room_id")))throw new DomainException("STALE_MATCH");
+        if(session==null && room==null && (request.getData().containsKey("match_id") || request.getData().containsKey("room_id")))throw new DomainException("STALE_MATCH");
+        disconnect(client,reason);
+        client.reply(new Message(ClientHandler.responseType(request.getType())));
+    }}
+    public void disconnect(ClientHandler client,String reason){synchronized(lock){
+        MatchSession session=matches.getSession(client);
+        if(session!=null){session.leave(client,reason);release(session,"Đối thủ đã rời phòng");}
+        else {
+            Room room=membership.remove(client);if(room!=null){rooms.remove(room.getRoomCode(),room);room.setStatus(Room.RoomStatus.CLOSED);}
         }
-
-        client.sendMessage(new Message(MessageType.QUEUE_JOIN_REQ, "SUCCESS", "Đã vào hàng chờ ghép trận..."));
-
-        // Nếu hàng chờ có từ 2 người trở lên, ghép cặp ngay
-        checkMatchmakingQueue();
-    }
-
-    public synchronized void removeFromQueue(ClientHandler client) {
-        matchmakingQueue.remove(client);
-    }
-
-    private synchronized void checkMatchmakingQueue() {
-        while (matchmakingQueue.size() >= 2) {
-            ClientHandler p1 = matchmakingQueue.poll();
-            ClientHandler p2 = matchmakingQueue.poll();
-
-            if (p1 == null || p2 == null || !p1.isConnected() || !p2.isConnected()) {
-                continue;
-            }
-
-            userManager.updateUserStatus(p1.getUser(), UserStatus.BUSY);
-            userManager.updateUserStatus(p2.getUser(), UserStatus.BUSY);
-
-            Message matchFoundP1 = new Message(MessageType.MATCH_FOUND);
-            matchFoundP1.put("opponent_id", p2.getUser().getUserId());
-            matchFoundP1.put("opponent_name", p2.getUser().getUsername());
-
-            Message matchFoundP2 = new Message(MessageType.MATCH_FOUND);
-            matchFoundP2.put("opponent_id", p1.getUser().getUserId());
-            matchFoundP2.put("opponent_name", p1.getUser().getUsername());
-
-            p1.sendMessage(matchFoundP1);
-            p2.sendMessage(matchFoundP2);
-
-            matchManager.createSession(p1, p2);
+        queue.remove(client);invalidate(client);if(online(client))users.updatePhase(client,"IDLE");
+    }}
+    public void release(MatchSession session,String reason){synchronized(lock){
+        if(matches.getSession(session.getPlayer1())!=session && matches.getSession(session.getPlayer2())!=session)return;
+        matches.cleanupSession(session);
+        for(ClientHandler c:Arrays.asList(session.getPlayer1(),session.getPlayer2())) {
+            Room room=membership.get(c);
+            if(room!=null && room.getRoomCode().equals(session.getRoomId())){membership.remove(c);rooms.remove(room.getRoomCode(),room);room.setStatus(Room.RoomStatus.CLOSED);}
+            if(online(c))users.updatePhase(c,"IDLE");
+            c.sendMessage(new Message(MessageType.ROOM_USER_LEFT,"SUCCESS",reason).put("room_id",session.getRoomId()).put("match_id",session.getMatchId()));
         }
-    }
-
-    // ==========================================
-    // DIRECT INVITATION
-    // ==========================================
-
-    public void handleInvite(ClientHandler inviter, int targetUserId) {
-        ClientHandler target = userManager.getClientById(targetUserId);
-        if (target == null) {
-            inviter.sendMessage(Message.error(MessageType.INVITE_RESULT, "Người chơi không online hoặc không tồn tại."));
-            return;
-        }
-
-        if (target.getUser().getStatus() != UserStatus.IDLE) {
-            inviter.sendMessage(Message.error(MessageType.INVITE_RESULT, "Người chơi này đang bận thi đấu hoặc ở phòng khác!"));
-            return;
-        }
-
-        Message notify = new Message(MessageType.INVITE_NOTIFY);
-        notify.put("inviter_id", inviter.getUser().getUserId());
-        notify.put("inviter_name", inviter.getUser().getUsername());
-        notify.put("inviter_points", inviter.getUser().getTotalPoints());
-        target.sendMessage(notify);
-    }
-
-    public void handleInviteResponse(ClientHandler responder, int inviterId, boolean accept) {
-        ClientHandler inviter = userManager.getClientById(inviterId);
-        if (inviter == null || !inviter.isConnected()) {
-            responder.sendMessage(Message.error(MessageType.ERROR_NOTIFY, "Người mời đã thoát game."));
-            return;
-        }
-
-        if (!accept) {
-            Message resMsg = Message.error(MessageType.INVITE_RESULT, "Người chơi " + responder.getUser().getUsername() + " đã từ chối lời mời.");
-            inviter.sendMessage(resMsg);
-            return;
-        }
-
-        // Người nhận chấp nhận (Accept) -> Tạo trận giữa 2 người
-        leaveCurrentRoom(inviter);
-        leaveCurrentRoom(responder);
-        removeFromQueue(inviter);
-        removeFromQueue(responder);
-
-        userManager.updateUserStatus(inviter.getUser(), UserStatus.BUSY);
-        userManager.updateUserStatus(responder.getUser(), UserStatus.BUSY);
-
-        Message okMsg1 = new Message(MessageType.INVITE_RESULT, "SUCCESS", "Bắt đầu trận đấu!");
-        okMsg1.put("opponent_id", responder.getUser().getUserId());
-        okMsg1.put("opponent_name", responder.getUser().getUsername());
-
-        Message okMsg2 = new Message(MessageType.INVITE_RESULT, "SUCCESS", "Bắt đầu trận đấu!");
-        okMsg2.put("opponent_id", inviter.getUser().getUserId());
-        okMsg2.put("opponent_name", inviter.getUser().getUsername());
-
-        inviter.sendMessage(okMsg1);
-        responder.sendMessage(okMsg2);
-
-        matchManager.createSession(inviter, responder);
-    }
-
-    public Room getRoomByClient(ClientHandler client) {
-        return clientRoomMap.get(client);
-    }
+    }}
+    public Room getRoomByClient(ClientHandler c){synchronized(lock){return membership.get(c);}}
+    public void shutdown(){synchronized(lock){for(Invitation i:invitations.values())if(i.timeout!=null)i.timeout.cancel(false);invitations.clear();queue.clear();rooms.clear();membership.clear();}}
 }

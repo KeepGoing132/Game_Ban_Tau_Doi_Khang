@@ -1,135 +1,50 @@
-# QUY TẮC TRÒ CHƠI & NGHIỆP VỤ (GAME RULES SPECIFICATION)
+# Luật Battleship Online
 
-Tài liệu này chuẩn hóa toàn bộ luật chơi, cơ chế tính điểm, xếp hạng và các trạng thái của hệ thống **Game Bắn Tàu Đối Kháng Online (Battleship Online)**.
+Đặc tả triển khai thống nhất theo đề bài BANTAUDOIKHANG.docx, bốn báo cáo và quyết định tại PLAN_GPT_6_1_SOL.md, cập nhật 04/10/2026.
 
----
+## Bàn cờ và đặt tàu
 
-## 1. THIẾT LẬP BÀN CỜ VÀ BỘ TÀU (FLEET & BOARD)
+Bàn 10×10, `x=col`, `y=row`, chỉ số 0..9. Bộ tàu đúng `[5,4,3,3,2]`, tổng 17 ô. ID tàu riêng biệt; tọa độ nguyên, thẳng ngang/dọc và liên tục; không vượt biên hoặc chồng ô. Tàu sát nhau vẫn hợp lệ. Server validate board tạm rồi mới thay board đã chấp nhận; board sai không làm mất bố trí cũ.
 
-### 1.1. Kích thước bản đồ
-- Kích thước: **10 x 10 ô vuông**.
-- Trục tọa độ chuẩn:
-  - Trục ngang (X): Chỉ số từ `0` đến `9` (hoặc cột `A` đến `J`).
-  - Trục dọc (Y): Chỉ số từ `0` đến `9` (hoặc hàng `1` đến `10`).
-- Khuyến nghị chuẩn hóa tọa độ truyền tải qua mạng: `(x, y)` với `0 <= x <= 9` và `0 <= y <= 9`.
+Match bắt đầu ở PLACING. Client gửi PLACE_SHIPS_REQ, đợi PLACE_SHIPS_RESP rồi mới PLAYER_READY_REQ với ready=true. Ready chỉ thành công nếu board hợp lệ; sau Ready khóa sửa tàu và click board. Có thể ready=false khi còn PLACING, chỉ mở sửa sau xác nhận server. Hai Ready chuyển RUNNING một lần; Ready lặp không chọn lại người đi trước/reset timer. Người đi trước được chọn ngẫu nhiên 50/50.
 
-### 1.2. Danh sách tàu chiến (Fleet Composition)
-Mỗi người chơi sở hữu chính xác **5 tàu chiến**, tổng cộng chiếm **17 ô**:
-| STT | Loại tàu | Chiều dài (Số ô) | Số lượng | Tổng số ô |
-| :---: | :--- | :---: | :---: | :---: |
-| 1 | Tàu sân bay (Carrier) | 5 ô | 1 | 5 |
-| 2 | Tàu thiết giáp (Battleship) | 4 ô | 1 | 4 |
-| 3 | Tàu tuần dương (Cruiser) | 3 ô | 2 | 6 |
-| 4 | Tàu khu trục (Destroyer) | 2 ô | 1 | 2 |
-| **Tổng** | **5 tàu** | - | **5 tàu** | **17 ô** |
+## Lượt bắn và timeout
 
-### 1.3. Quy tắc đặt tàu (Ship Placement Rules)
-- **Hướng đặt:** Chỉ được đặt theo **Hàng ngang (Horizontal)** hoặc **Hàng dọc (Vertical)**. Không được đặt chéo.
-- **Biên hợp lệ:** Toàn bộ thân tàu phải nằm hoàn toàn trong phạm vi `0 <= x <= 9` và `0 <= y <= 9`. Không được có phần nào chìa ra ngoài biên.
-- **Không chồng lấn (No Overlap):** Không ô nào của tàu này được trùng tọa độ với ô của tàu khác.
-- **Khoảng cách giữa các tàu:** Theo đặc tả đề bài, chỉ cần không chồng lấn và không ra ngoài bản đồ (không bắt buộc cách 1 ô giãn cách, trừ khi có thông nhất thêm; mặc định hợp lệ là tàu được phép nằm sát cạnh nhau).
-- **Trạng thái Sẵn sàng (Ready):** 
-  - Chỉ khi người chơi đã đặt đủ 5 tàu hợp lệ mới được kích hoạt nút **Ready**.
-  - Không được phép thay đổi vị trí tàu sau khi đã bấm **Ready** trừ khi hủy Ready (nếu đối thủ chưa Ready).
-  - Khi cả 2 người chơi đều chuyển sang trạng thái **Ready**, Server chính thức khởi tạo trận đấu và ngẫu nhiên chọn người đi trước (người bắn phát đầu tiên).
+Mỗi lượt xử lý có match_id, turn_id và deadline server, mặc định 15 giây. FIRE phải đúng trận, lượt, người có lượt, trước deadline và tọa độ chưa bắn trong biên. Yêu cầu sai không thay board, deadline hoặc shot count.
 
----
+- MISS chuyển cho đối thủ.
+- HIT/SUNK giữ người bắn; lượt xử lý mới có turn_id tăng và 15 giây mới.
+- SUNK chỉ công khai tọa độ tàu đã chìm; server không gửi tàu đối thủ còn bí mật.
+- Hết hạn mất lượt và gửi TIMEOUT_NOTIFY + TURN_CHANGE, không bắn hộ, không tăng số phát bắn.
+- FIRE tại/sau deadline bị TURN_EXPIRED nếu vẫn là lượt đó; yêu cầu mang lượt cũ bị STALE_TURN. Khóa match và đồng hồ đơn điệu quyết định thứ tự; callback lượt cũ không tác động.
+- Phát cuối phá đủ 17 ô kết thúc ngay, không tạo thêm lượt.
 
-## 2. LUẬT BẮN VÀ LƯỢT CHƠI (TURN & COMBAT MECHANICS)
+Quyết định mất lượt thay mô tả auto-fire cũ, phù hợp KHOA-05 trong Word. Chỉ server quyết định kết quả; đồng hồ UI dựa trên deadline và không tự đổi lượt khi về 0.
 
-### 2.1. Phân định lượt đi
-- **Khởi đầu trận:** Server sử dụng hàm random 50/50 để quyết định Player nào bắn trước (`turn_player_id`).
-- Server gửi thông báo đến cả 2 Client xác định rõ ai đang nắm quyền bắn.
+## Kết thúc, thoát và chơi lại
 
-### 2.2. Cơ chế hành động trong lượt
-- Đến lượt của mình, người chơi click chọn 1 ô trên bản đồ đối phương và nhấn nút **Bắn**.
-- **Bộ đếm thời gian (Turn Timer):** Mỗi lượt người chơi có tối đa **15 giây** để chọn ô và gửi lệnh bắn lên Server.
-- **Xử lý Timeout (Hết 15 giây):**
-  - Nếu hết 15 giây người chơi không bắn: Server tự động chọn ngẫu nhiên một ô chưa bắn trên bàn cờ đối phương để bắn hộ, HOẶC xử lý mất lượt (Server chuyển quyền bắn ngay cho đối phương). 
-  - *Khuyến nghị chuẩn:* Server tự động bắn ngẫu nhiên 1 ô hợp lệ chưa bắn, sau đó nếu Miss thì chuyển lượt cho đối thủ.
+| Giai đoạn | Thoát/đóng cửa sổ/ngắt mạng |
+| --- | --- |
+| PLACING | Hủy chuẩn bị, không tính trận/điểm |
+| RUNNING | Người thoát thua, trừ 3 điểm (không dưới 0) và cấm ghép trận 60 giây; đối thủ thắng +3; reason SURRENDER cho thoát chủ động, DISCONNECTED cho mất kết nối/logout |
+| FINISHED/POST_GAME | Dọn ngữ cảnh, không cộng điểm lại |
 
-### 2.3. Quy tắc chọn ô bắn
-- Người chơi **không được bắn lại** vào ô đã từng bắn trước đó (dù ô đó trước đây là Hit, Sunk hay Miss). Client phải vô hiệu hóa (disable) các ô này trên giao diện và Server phải kiểm tra chặn gian lận (authoritative check).
+Kết thúc có một đường xử lý duy nhất. Thắng +3, một trận thắng và một trận chơi; thua do bị bắn chìm hết tàu +0 và một trận chơi. Rời trận đang RUNNING bị trừ `min(3, tổng điểm hiện tại)` và tính một trận chơi. Mỗi trận chỉ xử phạt một lần; yêu cầu thoát lặp không trừ thêm hoặc kéo dài hạn phạt. Server chủ động dừng không phạt người chơi.
 
-### 2.4. Trọng tài Server và Phân loại kết quả bắn
-Server nắm toàn bộ ma trận tàu ẩn của cả 2 bên và là trọng tài duy nhất trả kết quả cho mỗi phát bắn:
-1. **Miss (Trượt):** Tọa độ bắn không trúng bất kỳ ô tàu nào.
-   - Bản đồ ghi nhận ô đánh dấu Trượt.
-   - **Quyền bắn chuyển ngay cho đối phương** (Đổi lượt).
-2. **Hit (Trúng):** Tọa độ bắn trúng 1 ô của tàu nhưng tàu đó vẫn còn ô khác chưa bị bắn thủng.
-   - Bản đồ hiển thị ô bị trúng đạn.
-   - **Người chơi hiện tại ĐƯỢC TIẾP TỤC BẮN** (không đổi lượt), reset timer 15 giây cho phát bắn kế tiếp.
-3. **Sunk (Đánh chìm):** Tọa độ bắn là ô cuối cùng của một con tàu khiến tàu đó chìm hoàn toàn.
-   - Server gửi kèm danh sách tọa độ của toàn bộ con tàu vừa chìm để Client vẽ hiệu ứng chìm tàu.
-   - **Người chơi hiện tại ĐƯỢC TIẾP TỤC BẮN** (nếu trận đấu chưa kết thúc), reset timer 15 giây.
+Hạn phạt 60 giây tính từ lúc server xác định rời trận, được lưu cùng điểm và lịch sử trong transaction SQLite nguyên tử theo match ID. Đăng xuất, đăng nhập lại hay khởi động lại server không xóa hạn phạt đã lưu. Trong thời gian phạt, server chặn ghép nhanh, tạo/vào phòng, gửi/nhận lời mời và chơi lại; hết hạn tự trở về IDLE. UI hiển thị thời gian còn lại, server quyết định quyền vào trận. Bản ghi cũ không bị phạt hồi tố.
 
----
+Nếu storage lỗi thì kết quả chờ lưu, không công bố đã lưu/thay đổi điểm thành công; người rời trận vẫn bị chặn ghép cho đến khi lưu thành công và đủ 60 giây. Retry không đặt lại thời điểm hết hạn.
 
-## 3. ĐIỀU KIỆN THẮNG THUA VÀ KẾT THÚC TRẬN (GAME OVER & SCORING)
+Kết thúc bình thường giữ POST_GAME tối đa 30 giây. Hai bên cùng đồng ý thì tạo MatchSession và match_id mới trong cùng phòng, đặt lại tàu và có timer mới. Từ chối, thoát, mất kết nối hoặc hết hạn đưa cả hai về IDLE. Đầu hàng/ngắt mạng hủy phòng ngay sau xử lý kết quả.
 
-### 3.1. Điều kiện thắng bình thường
-- Trận đấu kết thúc ngay lập tức khi toàn bộ 5 tàu (17 ô) của một người chơi bị bắn chìm.
-- Người còn lại (vẫn còn ít nhất 1 ô tàu chưa chìm) là **Người chiến thắng**.
+## Luyện tập với máy
 
-### 3.2. Điểm số (Scoring)
-- **Người thắng (Winner):** Được cộng **+3 điểm**.
-- **Người thua (Loser):** Được cộng **+0 điểm**.
-- Tổng số trận thắng của Winner được cộng thêm 1.
+Sảnh có Dễ/Vừa/Khó: ngẫu nhiên, săn ô xen kẽ/ô cạnh điểm trúng, tính xác suất vị trí tàu. Máy đặt tàu hợp lệ ngẫu nhiên, không biết tàu của người chơi; theo cùng luật bắn và timeout. Trận luyện tập không cộng/trừ điểm, không tăng thống kê xếp hạng và không phạt rời trận. Người đang bị phạt online vẫn phải hết hạn trước khi vào luyện tập.
 
-### 3.3. Xử lý thoát giữa trận (Rage Quit / Disconnect / Surrender)
-- Trong khi đang thi đấu, nếu người chơi bấm nút **Thoát** (hoặc chủ động đóng ứng dụng/mất kết nối đột ngột):
-  - Người thoát được tính là **Thua cuộc ngay lập tức** (0 điểm, tính là 1 trận thua).
-  - Server lập tức gửi thông báo xử thắng cho người chơi còn lại (+3 điểm, +1 trận thắng).
-  - Server đóng phòng thi đấu và giải phóng tài nguyên.
+## Lobby và xếp hạng
 
-### 3.4. Tùy chọn Chơi lại (Rematch) hoặc Thoát
-Sau khi công bố kết quả trận đấu:
-- Giao diện hai bên hiển thị 2 nút: **Chơi lại (Rematch)** và **Thoát (Exit)**.
-- Nếu **cả hai bên cùng bấm Chơi lại**: Server reset trận đấu trong cùng phòng, đưa 2 người chơi quay về màn hình bố trí tàu mới.
-- Nếu **một bên bấm Thoát** (hoặc hết thời gian chờ xác nhận): Phòng chơi bị hủy, đưa người chơi về màn hình Lobby / Danh sách online.
+Bốn lối vào trận: mời trực tiếp Accept/Reject, tạo phòng, join mã sáu ký tự, queue tự ghép. Một người chỉ ở một queue/phòng/trận. Queue là BUSY; chỉ IDLE được mời/tạo/join. Không tự mời/tự join. Invitation có ID và hạn 30 giây; Accept kiểm tra lại cả hai người và chỉ receiver được phản hồi.
 
-### 3.5. Lưu trữ kết quả trận đấu (Match Record)
-Mỗi trận kết thúc phải lưu một bản ghi lịch sử gồm:
-- Mã trận đấu (`match_id`)
-- ID / Tên người chơi 1 và người chơi 2
-- ID / Tên người thắng, người thua
-- Thời gian bắt đầu và kết thúc (thời lượng thi đấu)
-- Tổng số lượt bắn của mỗi người chơi
-- Điểm số nhận được của mỗi người chơi
+Xếp hạng: total_points giảm dần, total_wins giảm dần, tỷ lệ wins/games giảm dần; không có trận thì tỷ lệ 0. Nếu còn bằng, username rồi user ID tăng dần. UI hiển thị phần trăm, so sánh thứ hạng dùng tỷ lệ chưa làm tròn.
 
----
-
-## 4. QUY TẮC BẢNG XẾP HẠNG (LEADERBOARD CRITERIA)
-
-Mỗi người chơi có thể mở xem Bảng xếp hạng toàn hệ thống bất kỳ lúc nào từ màn hình sảnh (Lobby).
-Thứ tự xếp hạng người chơi được sắp xếp tuần tự theo các tiêu chí ưu tiên:
-1. **Tổng số điểm (Total Points)** giảm dần (Ưu tiên cao nhất).
-2. Nếu bằng điểm: **Tổng số trận thắng (Total Wins)** giảm dần.
-3. Nếu vẫn bằng: **Tỷ lệ thắng (Win Rate %)** giảm dần:
-   $$\text{Win Rate} = \frac{\text{Total Wins}}{\text{Total Games Played}} \times 100\%$$
-   *(Nếu số trận = 0 thì Win Rate = 0%).*
-4. Nếu vẫn bằng: Xếp theo tên tài khoản (A-Z) hoặc thời gian đăng ký tài khoản trước.
-
----
-
-## 5. CƠ CHẾ SẢNH (LOBBY) & TẠO TRẬN (MATCHMAKING)
-
-Người chơi đăng nhập vào hệ thống sẽ ở trạng thái `ONLINE` (Rảnh). Có 4 hình thức bắt cặp vào trận:
-
-1. **Thách đấu trực tiếp (Direct Invite):**
-   - Click vào người chơi có trạng thái `RẢNH` trong danh sách Online -> Gửi lời mời.
-   - Phía người nhận hiện hộp thoại: Chấp nhận (`Accept`) hoặc Từ chối (`Reject`).
-   - Nếu `Accept`: Server tạo phòng riêng và chuyển cả 2 vào màn hình đặt tàu. Cả 2 chuyển sang trạng thái `BẬN`.
-   - Nếu `Reject`: Server thông báo lại cho người gửi lời mời biết lý do bị từ chối.
-
-2. **Tạo phòng riêng (Create Room):**
-   - Người chơi chọn "Tạo phòng" -> Server cấp một **Mã phòng (Room Code)** duy nhất gồm 6 ký tự (ví dụ: `ROOM88`).
-   - Chủ phòng chia sẻ mã này cho bạn bè.
-
-3. **Vào phòng bằng mã (Join Room):**
-   - Người chơi nhập Room Code -> Gửi lên Server.
-   - Server kiểm tra: Nếu mã phòng tồn tại và phòng đang chờ người (1/2), cho phép vào phòng; nếu phòng đầy hoặc không tồn tại thì báo lỗi.
-
-4. **Hàng chờ tự động (Auto Matchmaking):**
-   - Người chơi bấm "Tìm trận nhanh" -> Server đưa vào Queue.
-   - Khi có ít nhất 2 người trong Queue, Server tự động ghép cặp 2 người chơi đầu tiên, tạo phòng đấu và bắt đầu quá trình đặt tàu.
+Heartbeat mặc định mỗi 5 giây; không nhận message hợp lệ 20 giây thì cleanup theo giai đoạn trên. Server xác định người gửi từ session, không tin user ID do client tự khai.

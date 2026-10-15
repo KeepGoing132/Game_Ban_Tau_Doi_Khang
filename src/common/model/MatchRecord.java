@@ -1,6 +1,17 @@
 package common.model;
 
 public class MatchRecord {
+    private int loserId;
+    private String loserName;
+    private long startedAt;
+    private long endedAt;
+    private int player1Points;
+    private int player2Points;
+    private String reason;
+    private long matchmakingBlockedUntil;
+    public long getMatchmakingBlockedUntil() { return matchmakingBlockedUntil; }
+    public void setMatchmakingBlockedUntil(long value) { matchmakingBlockedUntil = value; }
+    private boolean legacy;
     private String matchId;
     private int player1Id;
     private String player1Name;
@@ -14,7 +25,7 @@ public class MatchRecord {
     private long timestamp;
 
     public MatchRecord() {
-        this.timestamp = System.currentTimeMillis();
+        this.timestamp = 0;
     }
 
     public String getMatchId() {
@@ -104,4 +115,20 @@ public class MatchRecord {
     public void setTimestamp(long timestamp) {
         this.timestamp = timestamp;
     }
+    public int getLoserId() { return loserId; }
+    public void setLoserId(int value) { loserId = value; }
+    public String getLoserName() { return loserName; }
+    public void setLoserName(String value) { loserName = value; }
+    public long getStartedAt() { return startedAt; }
+    public void setStartedAt(long value) { startedAt = value; }
+    public long getEndedAt() { return endedAt; }
+    public void setEndedAt(long value) { endedAt = value; }
+    public int getPlayer1Points() { return player1Points; }
+    public void setPlayer1Points(int value) { player1Points = value; }
+    public int getPlayer2Points() { return player2Points; }
+    public void setPlayer2Points(int value) { player2Points = value; }
+    public String getReason() { return reason; }
+    public void setReason(String value) { reason = value; }
+    public boolean getLegacy() { return legacy; }
+    public void setLegacy(boolean value) { legacy = value; }
 }
