@@ -28,6 +28,7 @@ public final class OceanVisualTests {
     private static JFrame window;
     private static BattlePanel battle;
     private static PlacementPanel placement;
+    private static MatchHistoryDialog historyDialog;
 
     public static void run()throws Exception {
         Path dir=DomainTests.empty("battleship-ocean-");
@@ -36,6 +37,7 @@ public final class OceanVisualTests {
         try {
             battleScreen(dir);
             placementScreen(dir);
+            historyDialog(dir);
             animationLifecycle(dir);
         } finally {
             SwingSmoke.edt(()->{for(Window w:Window.getWindows())w.dispose();});
@@ -109,9 +111,23 @@ public final class OceanVisualTests {
         Thread.sleep(120);
         SwingSmoke.edt(()->{rewindEffect(battle,0.74);ImageIO.write(grabNow(window),"png",dir.resolve("ship-sunk.png").toFile());});
         SwingSmoke.waitFor(()->!battle.isAnimating(),"sunk effect ends");
-        SwingSmoke.edt(()->battle.showGameOver(true,3,"ALL_SHIPS_DESTROYED"));
+        // The server releases the enemy fleet with the end message: the report must show it.
+        List<Ship> enemy=BotBrain.fleet(new Random(11));
+        SwingSmoke.edt(()->battle.showGameOver(true,3,"ALL_SHIPS_DESTROYED",enemy));
         SwingSmoke.waitFor(()->field(battle,"resultDialog")!=null,"result dialog opens");
         Thread.sleep(500);
+        SwingSmoke.edt(()->{
+            @SuppressWarnings("unchecked") List<Ship> revealed=(List<Ship>)field(battle,"revealedFleet");
+            check(revealed!=null && revealed.size()==5,"battle report keeps the released fleet");
+            BoardGridPanel shown=(BoardGridPanel)field(battle,"oppBoardGrid");
+            int shipCells=0;
+            for(Ship ship:revealed)for(Coordinate c:ship.getCoordinates()){
+                shipCells++;
+                check(shown.getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"released fleet is painted on the enemy board");
+            }
+            check(shipCells==17,"released fleet covers all 17 ship cells");
+        });
+        SwingSmoke.edt(()->{try{SwingSmoke.snapshot((Component)field(battle,"resultDialog"),dir.resolve("result-report.png"));}catch(Exception e){throw new RuntimeException(e);}});
         SwingSmoke.edt(()->{try{SwingSmoke.snapshot((Component)field(battle,"resultDialog"),dir.resolve("result.png"));}catch(Exception e){throw new RuntimeException(e);}});
         SwingSmoke.edt(()->battle.disposePanel());
         SwingSmoke.edt(()->{window.dispose();window=null;battle=null;});
@@ -140,6 +156,43 @@ public final class OceanVisualTests {
         Thread.sleep(200);
         SwingSmoke.edt(()->SwingSmoke.snapshot(window,dir.resolve("placement-preview.png")));
         SwingSmoke.edt(()->{placement=null;window.dispose();window=null;});
+    }
+
+    // ------------------------------------------------------------------ match history
+    private static void historyDialog(Path dir)throws Exception {
+        final java.util.Map<String,Object> data=sampleHistory();
+        // a modal dialog blocks its dispatch thread, so it is opened from invokeLater
+        SwingUtilities.invokeLater(()->{
+            MatchHistoryDialog dialog=new MatchHistoryDialog(null,data);
+            historyDialog=dialog;
+            dialog.setVisible(true);
+        });
+        SwingSmoke.waitFor(()->historyDialog!=null&&historyDialog.isShowing(),"history dialog shown");
+        SwingSmoke.edt(()->{
+            check(historyDialog.rows().getRowCount()==8,"history lists every finished match");
+            check("THẮNG".equals(historyDialog.rows().getValueAt(0,2))||"THUA".equals(historyDialog.rows().getValueAt(0,2)),"history marks the result");
+            SwingSmoke.snapshot(historyDialog,dir.resolve("match-history.png"));
+        });
+        SwingSmoke.edt(()->{historyDialog.dispose();historyDialog=null;});
+    }
+    private static java.util.Map<String,Object> sampleHistory() {
+        java.util.Map<String,Object> data=new java.util.LinkedHashMap<>();
+        data.put("user_id",7);data.put("username","ngoc_bao");
+        data.put("total_games",23);data.put("total_wins",15);data.put("total_points",45);
+        List<Object> rows=new ArrayList<>();
+        String[] opponents={"thanh_hai","dang_khoa","tuan_duong","player1","gui_b","thanh_hai","dang_khoa","tuan_duong"};
+        String[] reasons={"ALL_SHIPS_DESTROYED","ALL_SHIPS_DESTROYED","SURRENDER","ALL_SHIPS_DESTROYED","DISCONNECTED","ALL_SHIPS_DESTROYED","SURRENDER","ALL_SHIPS_DESTROYED"};
+        long base=System.currentTimeMillis();
+        for(int i=0;i<opponents.length;i++){
+            boolean won=i%3!=2;
+            java.util.Map<String,Object> row=new java.util.LinkedHashMap<>();
+            row.put("opponent_name",opponents[i]);row.put("won",won);row.put("points",won?3:(i==4?-3:0));
+            row.put("shots",18+i*3);row.put("duration_seconds",120+i*37);row.put("reason",reasons[i]);
+            row.put("ended_at_ms",base-(long)i*5_400_000L);
+            rows.add(row);
+        }
+        data.put("matches",rows);
+        return data;
     }
 
     // ------------------------------------------------------------------ lifecycle checks

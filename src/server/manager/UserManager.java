@@ -1,5 +1,6 @@
 package server.manager;
 
+import common.model.MatchRecord;
 import common.model.User;
 import common.model.UserStatus;
 import common.protocol.Message;
@@ -165,5 +166,45 @@ public class UserManager {
 
     public ClientHandler getClientById(int userId) {
         return activeClients.get(userId);
+    }
+
+    /**
+     * Match history of one account, newest first. Only public result data leaves the server:
+     * who played, who won, the reason, shots, duration and the points each side got.
+     */
+    public Map<String, Object> matchHistory(ClientHandler requester, int targetUserId, int limit) {
+        User viewer = requester == null ? null : requester.getUser();
+        if (viewer == null) throw new DomainException("UNAUTHENTICATED", "Hãy đăng nhập lại");
+        User target = targetUserId <= 0 ? viewer : storageManager.findById(targetUserId);
+        if (target == null) throw new DomainException("USER_NOT_FOUND", "Không tìm thấy người chơi");
+        int capped = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 50));
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (MatchRecord r : storageManager.historyFor(target.getUserId(), capped)) {
+            boolean first = r.getPlayer1Id() == target.getUserId();
+            int myPoints = first ? r.getPlayer1Points() : r.getPlayer2Points();
+            int myShots = first ? r.getPlayer1Shots() : r.getPlayer2Shots();
+            String opponentName = first ? r.getPlayer2Name() : r.getPlayer1Name();
+            int opponentId = first ? r.getPlayer2Id() : r.getPlayer1Id();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("match_id", r.getMatchId());
+            row.put("opponent_id", opponentId);
+            row.put("opponent_name", opponentName == null || opponentName.isEmpty() ? "Không rõ" : opponentName);
+            row.put("won", r.getWinnerId() == target.getUserId());
+            row.put("points", myPoints);
+            row.put("shots", myShots);
+            row.put("duration_seconds", r.getDurationSeconds());
+            row.put("reason", r.getReason() == null ? "" : r.getReason());
+            row.put("ended_at_ms", r.getEndedAt() > 0 ? r.getEndedAt() : r.getTimestamp());
+            row.put("legacy", r.getLegacy());
+            rows.add(row);
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("user_id", target.getUserId());
+        result.put("username", target.isDeleted() ? "Tài khoản đã xóa" : target.getUsername());
+        result.put("total_games", target.getTotalGames());
+        result.put("total_wins", target.getTotalWins());
+        result.put("total_points", target.getTotalPoints());
+        result.put("matches", rows);
+        return result;
     }
 }

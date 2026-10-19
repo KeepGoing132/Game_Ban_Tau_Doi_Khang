@@ -20,6 +20,8 @@ public class PlacementPanel extends OceanPanel {
     private static final String[] SHIP_IDS={"CARRIER","BATTLESHIP","CRUISER_1","CRUISER_2","DESTROYER"};
     private static final String[] SHIP_NAMES={"Tàu sân bay","Thiết giáp hạm","Tuần dương I","Tuần dương II","Khu trục hạm"};
     private static final int[] SHIP_SIZES=GameConfig.SHIP_SIZES;
+    /** Each ship class carries its own colour, so the fleet list reads as a colourful roster. */
+    private static final Color[] SHIP_ACCENTS={Theme.AZURE,Theme.ORCHID,Theme.MAGENTA,Theme.MINT,Theme.AMBER};
     private final BoardGridPanel gridPanel;
     private final ReadyListener readyListener;
     private final List<Ship> placedShips=new ArrayList<>();
@@ -45,7 +47,7 @@ public class PlacementPanel extends OceanPanel {
         JPanel header=Theme.transparent(new BorderLayout(18,0));
         SeaDecor compass=new SeaDecor(SeaDecor.Kind.COMPASS);compass.setPreferredSize(new Dimension(56,56));header.add(compass,BorderLayout.WEST);
         JPanel heading=Theme.stack();
-        Theme.SeaTitle title=new Theme.SeaTitle("Triển khai hạm đội",Theme.FONT_TITLE);title.setShimmer(true);
+        Theme.SeaTitle title=new Theme.SeaTitle("Triển khai hạm đội",Theme.FONT_TITLE,Theme.MAGENTA,Theme.MINT);title.setShimmer(true);
         Theme.addStack(heading,title,5);Theme.addStack(heading,lblMatch,2);
         SeaDecor rule=new SeaDecor(SeaDecor.Kind.WAVES);rule.setPreferredSize(new Dimension(0,8));rule.setMaximumSize(new Dimension(Integer.MAX_VALUE,8));Theme.addStack(heading,rule,0);
         header.add(heading,BorderLayout.CENTER);
@@ -64,7 +66,8 @@ public class PlacementPanel extends OceanPanel {
             final int index=i;JButton b=new JButton(){
                 @Override protected void paintComponent(Graphics graphics){
                     super.paintComponent(graphics);Graphics2D g=Theme.graphics(graphics);
-                    g.setColor(locked?Theme.TEXT_MUTED:isPlaced(index)?Theme.SEA_FOAM:index==currentShipIndex?Theme.PRIMARY:new Color(150,214,236,150));
+                    Color accent=SHIP_ACCENTS[index];
+                    g.setColor(locked?Theme.TEXT_MUTED:isPlaced(index)?accent:Theme.blend(accent,new Color(18,42,74),.58f));
                     int start=getWidth()-94;for(int n=0;n<SHIP_SIZES[index];n++)g.fillRoundRect(start+n*13,getHeight()/2-4,10,8,3,3);
                     if(isPlaced(index)){g.setStroke(new BasicStroke(1.6f));g.drawLine(12,getHeight()/2,15,getHeight()/2+3);g.drawLine(15,getHeight()/2+3,21,getHeight()/2-4);}g.dispose();
                 }
@@ -76,7 +79,7 @@ public class PlacementPanel extends OceanPanel {
         JPanel tools=Theme.transparent(new GridLayout(1,2,8,0));btnRandom.setFont(Theme.FONT_SMALL);btnReset.setFont(Theme.FONT_SMALL);btnRandom.setBorder(new EmptyBorder(10,8,10,8));btnReset.setBorder(new EmptyBorder(10,8,10,8));btnRandom.addActionListener(e->randomizePlacement());btnReset.addActionListener(e->resetPlacement());tools.add(btnRandom);tools.add(btnReset);tools.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));Theme.addStack(fleet,tools,0);
         JScrollPane fleetScroll=Theme.scrollPage(fleet,396,new Color(0,0,0,0));Theme.transparentScroll(fleetScroll);side.add(fleetScroll,BorderLayout.CENTER);
         JPanel readyArea=Theme.stack();Theme.addStack(readyArea,lblProgress,8);
-        progress.setPreferredSize(new Dimension(270,10));progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,10));progress.setForeground(Theme.PRIMARY);Theme.addStack(readyArea,progress,10);
+        progress.setPreferredSize(new Dimension(270,10));progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,10));progress.setForeground(Theme.MINT);Theme.addStack(readyArea,progress,10);
         lblInstruction.setPreferredSize(new Dimension(270,44));lblInstruction.setMaximumSize(new Dimension(Integer.MAX_VALUE,44));Theme.addStack(readyArea,lblInstruction,10);
         btnReady.setMaximumSize(new Dimension(Integer.MAX_VALUE,46));btnReady.addActionListener(e->{if(ready){setPending();if(cancelReady!=null)cancelReady.run();}else{setPending();if(readyListener!=null)readyListener.onReady(new ArrayList<>(placedShips));}});Theme.addStack(readyArea,btnReady,0);side.add(readyArea,BorderLayout.SOUTH);
         JPanel footer=Theme.transparent(new BorderLayout(0,6));
@@ -109,7 +112,7 @@ public class PlacementPanel extends OceanPanel {
         refreshGridVisuals();checkReadyCondition();refreshFleet();
     }
     private boolean isPlaced(int index){for(Ship s:placedShips)if(s.getId().equals(SHIP_IDS[index]))return true;return false;}
-    private void refreshFleet(){for(int i=0;i<5;i++)if(fleetButtons[i]!=null){JButton b=fleetButtons[i];b.setText(SHIP_NAMES[i]);b.setBackground(i==currentShipIndex?new Color(18,86,106):isPlaced(i)?new Color(14,58,88):new Color(11,42,70));b.setForeground(i==currentShipIndex?Theme.PRIMARY:Theme.TEXT_MAIN);b.setEnabled(!locked);b.repaint();}}
+    private void refreshFleet(){for(int i=0;i<5;i++)if(fleetButtons[i]!=null){JButton b=fleetButtons[i];Color accent=SHIP_ACCENTS[i];b.setText(SHIP_NAMES[i]);b.setBackground(i==currentShipIndex?Theme.blend(new Color(11,44,76),accent,.34f):isPlaced(i)?Theme.blend(new Color(12,52,80),accent,.14f):new Color(11,42,70));b.setForeground(i==currentShipIndex?accent:Theme.TEXT_MAIN);b.setEnabled(!locked);b.repaint();}}
     public void randomizePlacement(){
         if(locked)return;placedShips.clear();Random random=new Random();Set<Coordinate> occupied=new HashSet<>();
         for(int i=0;i<5;i++)for(int attempt=0;attempt<1000;attempt++){

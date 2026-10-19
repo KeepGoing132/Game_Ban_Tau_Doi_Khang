@@ -112,6 +112,14 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         send(new Message(MessageType.GET_LEADERBOARD_REQ));
     }
 
+    /** targetUserId 0 asks for the logged-in player's own history. */
+    public void requestMatchHistory(int targetUserId) {
+        Message msg = new Message(MessageType.GET_MATCH_HISTORY_REQ);
+        msg.put("target_user_id", Math.max(0, targetUserId));
+        msg.put("limit", 20);
+        send(msg);
+    }
+
     public void createRoom() {
         send(new Message(MessageType.CREATE_ROOM_REQ));
     }
@@ -304,6 +312,13 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
                 break;
             }
 
+            case MATCH_HISTORY_RESP: {
+                MatchHistoryDialog dialog = new MatchHistoryDialog(
+                        lobbyFrame != null && lobbyFrame.isVisible() ? lobbyFrame : gameWindow, msg.getData());
+                dialog.setVisible(true);
+                break;
+            }
+
             case CREATE_ROOM_RESP: {
                 String code = JsonUtil.getString(msg.getData(), "room_code", "");
                 roomId=JsonUtil.getString(msg.getData(),"room_id",code);
@@ -468,7 +483,8 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
                 }
 
 
-                battlePanel.showGameOver(iWon, awardedPts, reason);
+                battlePanel.showGameOver(iWon, awardedPts, reason, parseFleet(JsonUtil.getList(msg.getData(), "opponent_ships")),
+                        JsonUtil.getInt(msg.getData(), "opponent_shots", 0));
                 break;
             }
 
@@ -505,6 +521,33 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
             default:
                 break;
         }
+    }
+
+    /**
+     * Reads the fleet layout used by PLACE_SHIPS_REQ and by MATCH_END once the match is over:
+     * {@code [{id, size, coordinates:[{x,y}]}]}.
+     */
+    static List<Ship> parseFleet(List<Object> raw) {
+        if (raw == null) return null;
+        List<Ship> fleet = new ArrayList<>();
+        for (Object item : raw) {
+            if (!(item instanceof Map)) continue;
+            @SuppressWarnings("unchecked") Map<String, Object> entry = (Map<String, Object>) item;
+            String id = JsonUtil.getString(entry, "id", "");
+            int size = JsonUtil.getInt(entry, "size", 0);
+            List<Coordinate> cells = new ArrayList<>();
+            List<Object> coords = JsonUtil.getList(entry, "coordinates");
+            if (coords != null) for (Object cell : coords) {
+                if (!(cell instanceof Map)) continue;
+                @SuppressWarnings("unchecked") Map<String, Object> c = (Map<String, Object>) cell;
+                cells.add(new Coordinate(JsonUtil.getInt(c, "x", -1), JsonUtil.getInt(c, "y", -1)));
+            }
+            if (id.isEmpty() || size <= 0 || cells.size() != size) continue;
+            for (Coordinate c : cells) if (c.getX() < 0 || c.getX() > 9 || c.getY() < 0 || c.getY() > 9) { cells = null; break; }
+            if (cells == null) continue;
+            fleet.add(new Ship(id, size, cells));
+        }
+        return fleet.isEmpty() ? null : fleet;
     }
 
     private void startShipPlacementPhase() {

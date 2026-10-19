@@ -32,6 +32,7 @@ public class LobbyFrame extends JFrame {
     private final JButton btnJoin=Theme.button("Vào phòng",true);
     private final JButton btnInvite=Theme.button("Mời thách đấu",false);
     private final JButton btnChat=Theme.button("Nhắn tin",true);
+    private final JButton btnHistory=Theme.button("Lịch sử",false);
     private final JButton btnLeaveRoom=Theme.button("Rời phòng",false);
     private final JButton btnCopy=Theme.button("Sao chép mã",false);
     private final JTable tblOnlineUsers;
@@ -54,8 +55,9 @@ public class LobbyFrame extends JFrame {
         Theme.addStack(sidebar,Theme.badge("HẢI CHIẾN",Theme.VIOLET),32);
         JButton home=Theme.button("01   Phòng chỉ huy",false);home.setForeground(Theme.PRIMARY);home.setMargin(new Insets(0,0,0,0));home.setFont(Theme.FONT_SMALL);home.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));
         home.addActionListener(e->showStatus("Bạn đang ở phòng chỉ huy. Chọn một chế độ để bắt đầu.",false));Theme.addStack(sidebar,home,8);
-        JButton ranking=Theme.button("02   Bảng xếp hạng",false);ranking.setFont(Theme.FONT_SMALL);ranking.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));ranking.addActionListener(e->controller.requestLeaderboard());Theme.addStack(sidebar,ranking,8);
-        JButton guide=Theme.button("03   Cách chơi",false);guide.setFont(Theme.FONT_SMALL);guide.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));guide.addActionListener(e->showGuide());Theme.addStack(sidebar,guide,0);
+        JButton ranking=Theme.button("02   Bảng xếp hạng",false);ranking.setForeground(Theme.GOLD);ranking.setFont(Theme.FONT_SMALL);ranking.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));ranking.addActionListener(e->controller.requestLeaderboard());Theme.addStack(sidebar,ranking,8);
+        JButton history=Theme.button("03   Lịch sử đấu",false);history.setForeground(Theme.MAGENTA);history.setFont(Theme.FONT_SMALL);history.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));history.addActionListener(e->controller.requestMatchHistory(0));Theme.addStack(sidebar,history,8);
+        JButton guide=Theme.button("04   Cách chơi",false);guide.setForeground(Theme.AZURE);guide.setFont(Theme.FONT_SMALL);guide.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));guide.addActionListener(e->showGuide());Theme.addStack(sidebar,guide,0);
         sidebar.add(Box.createVerticalGlue());
         JButton sound=Theme.button(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt",false);sound.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));sound.addActionListener(e->{GameAudio.setEnabled(!GameAudio.isEnabled());sound.setText(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt");});Theme.addStack(sidebar,sound,8);
         JButton sea=Theme.button(OceanScene.isAnimated()?"Biển động: Bật":"Biển động: Tắt",false);sea.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));sea.setFont(Theme.FONT_SMALL);
@@ -67,14 +69,14 @@ public class LobbyFrame extends JFrame {
         JPanel main=Theme.transparent(new BorderLayout(0,16));main.setBorder(new EmptyBorder(24,28,22,28));root.add(main,BorderLayout.CENTER);
         JPanel top=Theme.stack();Theme.addStack(top,lblUserInfo,5);
         top.add(Box.createVerticalStrut(12));
-        JPanel stats=Theme.transparent(new GridLayout(1,3,14,0));stats.add(stat("TỔNG ĐIỂM",lblPoints,"+3 điểm cho mỗi chiến thắng"));stats.add(stat("TRẬN THẮNG",lblWins,"Số trận thắng / đã chơi"));stats.add(stat("TỶ LỆ THẮNG",lblRate,""));stats.setMaximumSize(new Dimension(Integer.MAX_VALUE,94));Theme.addStack(top,stats,0);main.add(top,BorderLayout.NORTH);
+        JPanel stats=Theme.transparent(new GridLayout(1,3,14,0));stats.add(stat("TỔNG ĐIỂM",lblPoints,"+3 điểm cho mỗi chiến thắng",Theme.AMBER));stats.add(stat("TRẬN THẮNG",lblWins,"Số trận thắng / đã chơi",Theme.MINT));stats.add(stat("TỶ LỆ THẮNG",lblRate,"",Theme.AZURE));stats.setMaximumSize(new Dimension(Integer.MAX_VALUE,94));Theme.addStack(top,stats,0);main.add(top,BorderLayout.NORTH);
 
         JPanel body=Theme.transparent(new BorderLayout(18,0));main.add(Theme.scrollPage(body,466,Theme.BG_DARK),BorderLayout.CENTER);
         JPanel left=Theme.transparent(new BorderLayout(0,18));body.add(left,BorderLayout.CENTER);
-        JPanel queue=Theme.card(new Color(31,63,92),22);queue.setLayout(new BorderLayout(12,12));
-        JPanel queueText=Theme.stack();Theme.addStack(queueText,Theme.badge("CHỌN ĐỐI THỦ",Theme.PRIMARY),12);
-        Theme.addStack(queueText,Theme.label("Sẵn sàng khai hỏa?",Theme.FONT_TITLE.deriveFont(25f),Theme.TEXT_MAIN),7);
-        Theme.addStack(queueText,lblQuickMatchStatus,16);btnQuickMatch.addActionListener(e->toggleMatchmakingQueue());JPanel modes=Theme.transparent(new GridLayout(1,2,12,0));modes.add(btnQuickMatch);Theme.styleButton(btnBot,Theme.VIOLET,Theme.BG_DARK);modes.add(btnBot);btnBot.addActionListener(e->botDialog());modes.setMaximumSize(new Dimension(Integer.MAX_VALUE,46));Theme.addStack(queueText,modes,0);queue.add(queueText,BorderLayout.CENTER);left.add(queue,BorderLayout.NORTH);
+        JPanel queue=Theme.vividCard(new Color(21,84,116),new Color(74,58,140),22);queue.setLayout(new BorderLayout(12,12));
+        JPanel queueText=Theme.stack();Theme.addStack(queueText,Theme.badge("CHỌN ĐỐI THỦ",Theme.MINT),12);
+        Theme.addStack(queueText,Theme.label("Sẵn sàng khai hỏa?",Theme.FONT_TITLE.deriveFont(25f),Theme.SEA_FOAM),7);
+        Theme.addStack(queueText,lblQuickMatchStatus,16);btnQuickMatch.addActionListener(e->toggleMatchmakingQueue());JPanel modes=Theme.transparent(new GridLayout(1,2,12,0));Theme.styleButton(btnQuickMatch,Theme.MINT,Theme.BG_DARK);modes.add(btnQuickMatch);Theme.styleButton(btnBot,Theme.ORCHID,Theme.BG_DARK);modes.add(btnBot);btnBot.addActionListener(e->botDialog());modes.setMaximumSize(new Dimension(Integer.MAX_VALUE,46));Theme.addStack(queueText,modes,0);queue.add(queueText,BorderLayout.CENTER);left.add(queue,BorderLayout.NORTH);
 
         JPanel online=Theme.createCardPanel();online.setLayout(new BorderLayout(0,10));
         JPanel onlineHeader=Theme.transparent(new BorderLayout());onlineHeader.add(Theme.label("Chỉ huy trực tuyến",Theme.FONT_HEADER,Theme.TEXT_MAIN),BorderLayout.WEST);
@@ -82,11 +84,24 @@ public class LobbyFrame extends JFrame {
         JPanel titles=Theme.stack();Theme.addStack(titles,onlineHeader,4);Theme.addStack(titles,lblOnlineCount,0);online.add(titles,BorderLayout.NORTH);
         tableModel=new DefaultTableModel(new String[]{"ID","Chỉ huy","Điểm","Trạng thái"},0){public boolean isCellEditable(int r,int c){return false;}};
         tblOnlineUsers=new JTable(tableModel);Theme.styleTable(tblOnlineUsers);
+        tblOnlineUsers.setDefaultRenderer(Object.class,new javax.swing.table.DefaultTableCellRenderer(){
+            public Component getTableCellRendererComponent(JTable t,Object value,boolean selected,boolean focus,int row,int column){
+                super.getTableCellRendererComponent(t,value,selected,focus,row,column);
+                // the ID column is hidden in the view, so status lives at view column 2
+                String status=String.valueOf(t.getValueAt(row,2));
+                Color color=column==0?Theme.SEA_FOAM:column==1?Theme.AMBER
+                        :status.startsWith("●")?Theme.MINT:status.startsWith("Đang bị")?Theme.CORAL:Theme.WARNING;
+                setForeground(selected?Theme.PRIMARY:color);
+                setFont(column==1?Theme.FONT_BOLD:Theme.FONT_REGULAR);
+                setBackground(selected?Theme.PANEL_LIGHT:(row%2==0?Theme.PANEL_BG:Theme.blend(Theme.PANEL_BG,Theme.PANEL_LIGHT,.35f)));
+                setBorder(new EmptyBorder(0,12,0,12));return this;}});
         tblOnlineUsers.removeColumn(tblOnlineUsers.getColumnModel().getColumn(0));
         tblOnlineUsers.getColumnModel().getColumn(0).setPreferredWidth(160);tblOnlineUsers.getColumnModel().getColumn(1).setPreferredWidth(60);tblOnlineUsers.getColumnModel().getColumn(2).setPreferredWidth(100);
         tblOnlineUsers.getSelectionModel().addListSelectionListener(e->updateActions());online.add(Theme.scroll(tblOnlineUsers),BorderLayout.CENTER);
         btnInvite.addActionListener(e->inviteSelectedUser());
-        JPanel playerActions=Theme.transparent(new GridLayout(1,2,10,0));playerActions.add(btnInvite);playerActions.add(btnChat);
+        Theme.styleButton(btnHistory,Theme.MINT,Theme.BG_DARK);
+        btnHistory.addActionListener(e->{int row=tblOnlineUsers.getSelectedRow();if(row>=0){int model=tblOnlineUsers.convertRowIndexToModel(row);controller.requestMatchHistory((Integer)tableModel.getValueAt(model,0));}});
+        JPanel playerActions=Theme.transparent(new GridLayout(1,3,10,0));playerActions.add(btnInvite);playerActions.add(btnChat);playerActions.add(btnHistory);
         btnChat.addActionListener(e->{int row=tblOnlineUsers.getSelectedRow();if(row>=0){int model=tblOnlineUsers.convertRowIndexToModel(row);controller.openChat((Integer)tableModel.getValueAt(model,0),(String)tableModel.getValueAt(model,1));}});
         online.add(playerActions,BorderLayout.SOUTH);left.add(online,BorderLayout.CENTER);
 
@@ -112,7 +127,13 @@ public class LobbyFrame extends JFrame {
         lblFeedback.setBorder(new EmptyBorder(6,0,0,0));Theme.addStack(notices,lblFeedback,0);main.add(notices,BorderLayout.SOUTH);
         queueTimer=new Timer(1000,e->updateQueueText());penaltyTimer=new Timer(250,e->updatePenalty());updateActions();
     }
-    private JPanel stat(String title,JLabel value,String detail){JPanel p=Theme.card(Theme.PANEL_BG,15);p.setLayout(new BorderLayout(0,4));p.add(Theme.muted(title),BorderLayout.NORTH);p.add(value,BorderLayout.CENTER);p.add(Theme.muted(detail),BorderLayout.SOUTH);return p;}
+    private JPanel stat(String title,JLabel value,String detail,Color accent){
+        JPanel p=Theme.vividCard(Theme.blend(new Color(22,26,64),accent,.26f),Theme.blend(new Color(30,44,84),accent,.16f),15);
+        p.setLayout(new BorderLayout(0,4));
+        p.add(Theme.label(title,Theme.FONT_SMALL.deriveFont(Font.BOLD),accent),BorderLayout.NORTH);
+        value.setForeground(accent);
+        p.add(value,BorderLayout.CENTER);p.add(Theme.muted(detail),BorderLayout.SOUTH);return p;
+    }
     public void updateUserInfo(User u){if(u==null)return;currentUserId=u.getUserId();lblUserInfo.setText("Chào mừng, "+u.getUsername());lblPoints.setText(String.valueOf(u.getTotalPoints()));lblWins.setText(u.getTotalWins()+" / "+u.getTotalGames());lblRate.setText(String.format(java.util.Locale.ROOT,"%.0f%%",u.getWinRate()));updateActions();}
     public void updateOnlineUsers(List<Object> users) {
         Integer selected=selectedUserId();tableModel.setRowCount(0);int others=0;
@@ -127,7 +148,7 @@ public class LobbyFrame extends JFrame {
         boolean idle="IDLE".equals(phase)&&!pending&&!isPenalized();
         btnBot.setEnabled(idle);btnAccount.setEnabled(!pending && ("IDLE".equals(phase)||"COOLDOWN".equals(phase)));btnCreateRoom.setEnabled(idle);btnJoin.setEnabled(idle);txtRoomCode.setEnabled(idle);
         int row=tblOnlineUsers==null?-1:tblOnlineUsers.getSelectedRow();boolean available=row>=0&&"● Sẵn sàng".equals(tableModel.getValueAt(tblOnlineUsers.convertRowIndexToModel(row),3));
-        btnChat.setEnabled(row>=0);btnInvite.setEnabled(idle&&available);btnQuickMatch.setEnabled(!pending&&!isPenalized()&&(idle||inQueue));btnCopy.setEnabled(roomCode!=null);btnLeaveRoom.setEnabled(!pending&&roomCode!=null);
+        btnChat.setEnabled(row>=0);btnHistory.setEnabled(row>=0);btnInvite.setEnabled(idle&&available);btnQuickMatch.setEnabled(!pending&&!isPenalized()&&(idle||inQueue));btnCopy.setEnabled(roomCode!=null);btnLeaveRoom.setEnabled(!pending&&roomCode!=null);
     }
     private boolean isPenalized(){return penaltyPending || (penaltyDeadlineNanos!=0 && penaltyDeadlineNanos-System.nanoTime()>0);}
     public void setPenalty(long remainingMs,boolean awaitingSave) {

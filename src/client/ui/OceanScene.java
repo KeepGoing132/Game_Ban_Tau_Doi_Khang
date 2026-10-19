@@ -61,16 +61,23 @@ public final class OceanScene {
         int horizon = horizon(height);
         backdrop = new BufferedImage(Math.max(1, width), Math.max(1, height), BufferedImage.TYPE_INT_RGB);
         Graphics2D s = Theme.graphics(backdrop);
-        s.setPaint(new GradientPaint(0, 0, Theme.SEA_SKY_TOP, 0, horizon, Theme.SEA_SKY_LOW));
-        s.fillRect(0, 0, width, horizon + 1);
+        s.setPaint(new GradientPaint(0, 0, Theme.SEA_SKY_TOP, 0, horizon * 0.55f, Theme.SEA_SKY_MID));
+        s.fillRect(0, 0, width, (int) (horizon * 0.55) + 1);
+        s.setPaint(new GradientPaint(0, horizon * 0.55f, Theme.SEA_SKY_MID, 0, horizon, Theme.SEA_SKY_LOW));
+        s.fillRect(0, (int) (horizon * 0.55), width, horizon - (int) (horizon * 0.55) + 1);
         s.setColor(Theme.SEA_HORIZON); s.fillRect(0, horizon, width, 1);
         s.setColor(alpha(Theme.SEA_HORIZON, 40)); s.fillRect(0, horizon + 1, width, 2);
         paintSun(s, width, height, horizon);
         paintIslands(s, width, horizon);
-        s.setPaint(new GradientPaint(0, horizon, alpha(Theme.SEA_MID, 235), 0, horizon + Math.max(1, (height - horizon) / 2), Theme.SEA_DEEP));
-        s.fillRect(0, horizon, width, height - horizon);
-        s.setPaint(new GradientPaint(0, horizon + Math.max(1, (height - horizon) / 2), alpha(Theme.SEA_DEEP, 120), 0, height, Theme.SEA_ABYSS));
-        s.fillRect(0, horizon, width, height - horizon);
+        // water: turquoise shallows near the horizon, then blue, then the violet-tinted deep
+        int shallowBand = horizon + Math.max(6, (height - horizon) / 9);
+        s.setPaint(new GradientPaint(0, horizon, Theme.SEA_SHALLOW, 0, shallowBand, Theme.SEA_MID));
+        s.fillRect(0, horizon, width, shallowBand - horizon);
+        int midBand = horizon + Math.max(12, (height - horizon) / 2);
+        s.setPaint(new GradientPaint(0, shallowBand, Theme.SEA_MID, 0, midBand, Theme.SEA_DEEP));
+        s.fillRect(0, shallowBand, width, midBand - shallowBand);
+        s.setPaint(new GradientPaint(0, midBand, Theme.SEA_DEEP, 0, height, Theme.SEA_ABYSS));
+        s.fillRect(0, midBand, width, height - midBand);
         for (int i = 0; i < 14; i++) {
             double x = noise(900 + i) * width, depth = 0.25 + noise(950 + i) * 0.7, length = (height - horizon) * (0.25 + noise(990 + i) * 0.5);
             s.setColor(new Color(120, 200, 226, (int) (7 + 8 * (1 - depth))));
@@ -127,7 +134,9 @@ public final class OceanScene {
                     if (i == 0) crest.moveTo(x, y); else crest.lineTo(x, y);
                 }
                 Path2D body = (Path2D) crest.clone(); body.lineTo(width, height); body.lineTo(0, height); body.closePath();
-                g.setPaint(new GradientPaint(0, 0, new Color(154, 224, 244, (int) (84 - calm * 32)), 0, height, new Color(154, 224, 244, 0)));
+                // far crests are turquoise, near ones slide towards periwinkle blue
+                int red = (int) lerp(96, 168, calm), green = (int) lerp(240, 208, calm), blue = (int) lerp(232, 255, calm);
+                g.setPaint(new GradientPaint(0, 0, new Color(red, green, blue, (int) (88 - calm * 30)), 0, height, new Color(red, green, blue, 0)));
                 g.fill(body);
                 g.setColor(new Color(232, 250, 255, (int) (118 - calm * 50)));
                 g.setStroke(new BasicStroke(1.6f)); g.draw(crest);
@@ -259,7 +268,7 @@ public final class OceanScene {
             band.lineTo(mid + width * 0.05, height);
             band.quadTo(mid + width * spread * 0.9, height * 0.34, mid + width * 0.10, 0);
             band.closePath();
-            g.setPaint(new GradientPaint(0, 0, new Color(214, 245, 255, (int) alpha), 0, height * 0.9f, new Color(214, 245, 255, 0)));
+            g.setPaint(new GradientPaint(0, 0, new Color(255, 226, 188, (int) alpha), 0, height * 0.9f, new Color(255, 226, 188, 0)));
             g.fill(band);
         }
         g.dispose();
@@ -326,7 +335,9 @@ public final class OceanScene {
         for (int i = 0; i < 18; i++) {
             double x = (noise(i * 5) * width + t * (5 + noise(i) * 12)) % (width + 40) - 20;
             double y = horizon + noise(i * 19) * (height - horizon), size = 1.5 + noise(i * 23) * 3.4;
-            g.setColor(new Color(236, 252, 255, (int) (alpha * 190 * (0.3 + 0.7 * Math.abs(Math.sin(t * 0.8 + i))))));
+            boolean warm = i % 3 == 0;
+            Color tint = warm ? new Color(255, 226, 196) : i % 3 == 1 ? new Color(158, 250, 240) : new Color(236, 252, 255);
+            g.setColor(new Color(tint.getRed(), tint.getGreen(), tint.getBlue(), (int) (alpha * 190 * (0.3 + 0.7 * Math.abs(Math.sin(t * 0.8 + i))))));
             g.fill(new Ellipse2D.Double(x, y, size, size));
         }
     }
@@ -530,7 +541,7 @@ public final class OceanScene {
             }
             Path2D body = (Path2D) crest.clone(); body.lineTo(width, crestY + band); body.lineTo(0, crestY + band); body.closePath();
             Graphics2D gb = (Graphics2D) g.create();
-            gb.setPaint(new GradientPaint(0, (float) crestY, new Color(58, 156, 186, 120), 0, (float) (crestY + band), alpha(Theme.SEA_DEEP, 20)));
+            gb.setPaint(new GradientPaint(0, (float) crestY, new Color(74, 208, 214, 132), 0, (float) (crestY + band), alpha(Theme.SEA_DEEP, 20)));
             gb.fill(body);
             gb.setColor(alpha(Theme.SEA_FOAM, 210)); gb.setStroke(new BasicStroke(2.4f)); gb.draw(crest);
             for (int i = 0; i < 30; i++) {

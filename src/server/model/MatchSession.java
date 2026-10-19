@@ -120,10 +120,26 @@ public class MatchSession {
         if(practice){r.setPlayer1Points(0);r.setPlayer2Points(0);resultSaved=true;}else resultSaved=storage.commitResult(r);
         Map<String,Object> scores=new LinkedHashMap<>();scores.put(String.valueOf(u1.getUserId()),score(u1,r.getPlayer1Points()));scores.put(String.valueOf(u2.getUserId()),score(u2,r.getPlayer2Points()));
         users.updatePhase(p1,"POST_GAME");users.updatePhase(p2,"POST_GAME");
-        both(event(MessageType.MATCH_END).put("winner_id",user(winner).getUserId()).put("loser_id",user(loser).getUserId()).put("reason",reason).put("duration_seconds",r.getDurationSeconds()).put("player1_shots",shots1).put("player2_shots",shots2).put("scores",scores).put("storage_saved",resultSaved).put("expires_at_ms",rematchDeadline));
+        Message end=event(MessageType.MATCH_END).put("winner_id",user(winner).getUserId()).put("loser_id",user(loser).getUserId()).put("reason",reason).put("duration_seconds",r.getDurationSeconds()).put("player1_shots",shots1).put("player2_shots",shots2).put("scores",scores).put("storage_saved",resultSaved).put("expires_at_ms",rematchDeadline);
+        // The match is over, so each side now receives the other side's fleet for the report.
+        p1.sendMessage(copyOf(end).put("opponent_ships",fleetOf(b2)).put("opponent_shots",shots2));
+        p2.sendMessage(copyOf(end).put("opponent_ships",fleetOf(b1)).put("opponent_shots",shots1));
         if(!resultSaved)both(Message.error(MessageType.ERROR_NOTIFY,"Kết quả đang chờ lưu; điểm chưa được áp dụng").errorCode("STORAGE_ERROR").put("match_id",matchId));
         // Callback runs later on scheduler, outside this match lock.
         scheduler.execute(finishedCallback);
+    }
+    private static Message copyOf(Message message){return Message.fromJson(message.toJson());}
+    /** Fleet layout in the same shape as PLACE_SHIPS_REQ, released only once the match is over. */
+    private static List<Map<String,Object>> fleetOf(Board board){
+        List<Map<String,Object>> fleet=new ArrayList<>();
+        for(Ship ship:board.getShips()){
+            Map<String,Object> entry=new LinkedHashMap<>();
+            entry.put("id",ship.getId());entry.put("size",ship.getSize());
+            List<Map<String,Object>> coords=new ArrayList<>();
+            for(Coordinate c:ship.getCoordinates())coords.add(coord(c));
+            entry.put("coordinates",coords);fleet.add(entry);
+        }
+        return fleet;
     }
     private Map<String,Object> score(User u,int awarded){Map<String,Object> m=users.publicUser(u);m.put("points_awarded",resultSaved?awarded:0);return m;}
     public synchronized boolean agreeRematch(ClientHandler c){

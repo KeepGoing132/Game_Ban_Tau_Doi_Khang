@@ -19,6 +19,15 @@ public final class Theme {
     public static final Color PRIMARY_HOVER = new Color(133, 238, 213);
     public static final Color VIOLET = new Color(168,145,255);
     public static final Color BLUE = new Color(99,180,255);
+    // Vivid accents used across the screens so each section has its own colour.
+    public static final Color MAGENTA = new Color(236, 126, 226);
+    public static final Color ORCHID = new Color(196, 128, 255);
+    public static final Color AZURE = new Color(96, 196, 255);
+    public static final Color MINT = new Color(104, 240, 178);
+    public static final Color AMBER = new Color(255, 198, 96);
+    public static final Color CORAL = new Color(255, 132, 126);
+    public static final Color GOLD = new Color(255, 214, 112);
+    public static final Color LIME = new Color(190, 236, 110);
     public static final Color SUCCESS = PRIMARY;
     public static final Color WARNING = new Color(242, 194, 111);
     public static final Color DANGER = new Color(248, 125, 121);
@@ -30,14 +39,16 @@ public final class Theme {
     public static final Color CELL_HIT = new Color(168, 68, 80);
     public static final Color CELL_MISS = new Color(27, 53, 89);
     public static final Color CELL_SUNK = new Color(85, 47, 89);
-    // Sea palette used by the in-match screens: sky, open water, foam and wet glass.
-    public static final Color SEA_SKY_TOP = new Color(8, 24, 46);
-    public static final Color SEA_SKY_LOW = new Color(38, 92, 128);
+    // Sea palette used by the in-match screens: sunset sky, turquoise shallows, foam, wet glass.
+    public static final Color SEA_SKY_TOP = new Color(14, 18, 60);
+    public static final Color SEA_SKY_MID = new Color(92, 58, 146);
+    public static final Color SEA_SKY_LOW = new Color(238, 148, 118);
     public static final Color SEA_SUN = new Color(255, 214, 150);
     public static final Color SEA_HORIZON = new Color(126, 202, 226);
-    public static final Color SEA_MID = new Color(17, 79, 122);
-    public static final Color SEA_DEEP = new Color(7, 34, 64);
-    public static final Color SEA_ABYSS = new Color(4, 18, 38);
+    public static final Color SEA_SHALLOW = new Color(52, 196, 196);
+    public static final Color SEA_MID = new Color(26, 132, 178);
+    public static final Color SEA_DEEP = new Color(12, 62, 132);
+    public static final Color SEA_ABYSS = new Color(9, 22, 62);
     public static final Color SEA_FOAM = new Color(226, 246, 255);
     public static final Color SEA_GLASS = new Color(9, 28, 52);
     private static final String UI_FONT = availableFont(Font.SANS_SERIF, "Segoe UI", "Helvetica Neue", "Arial");
@@ -159,19 +170,50 @@ public final class Theme {
         RoundedPanel p = new RoundedPanel(SEA_GLASS, alpha); p.setSheen(true);
         p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
     }
+    /** Card with a two-tone fill, so panels carry some colour instead of a flat rectangle. */
+    public static JPanel vividCard(Color from, Color to, int padding) {
+        RoundedPanel p = new RoundedPanel(from); p.setGradientTo(to); p.setSheen(true);
+        p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
+    }
+    /** Battle-log rows: the outcome word decides the colour of the line. */
+    public static javax.swing.ListCellRenderer<Object> logRenderer() {
+        return new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> list,Object value,int index,boolean selected,boolean focus) {
+                super.getListCellRendererComponent(list,value,index,selected,focus);
+                String text = String.valueOf(value);
+                Color color = TEXT_MAIN;
+                if (text.contains("Đánh chìm")) color = CORAL;
+                else if (text.contains("Trúng tàu")) color = AMBER;
+                else if (text.contains("Trượt")) color = AZURE;
+                else if (text.contains("thời gian")) color = WARNING;
+                else if (text.contains("Trận đấu") || text.contains("kết thúc")) color = MINT;
+                setForeground(selected ? SEA_FOAM : color);
+                setBackground(new Color(0,0,0,0)); setOpaque(false);
+                setFont(FONT_REGULAR); setBorder(new EmptyBorder(0,10,0,6));
+                return this;
+            }
+        };
+    }
     public static class RoundedPanel extends JPanel {
         private int fillAlpha = 255;
         private boolean sheen, outlined = true;
+        private Color gradientTo;
         public RoundedPanel(Color color) { this(color, 255); }
         public RoundedPanel(Color color, int fillAlpha) { setBackground(color); setOpaque(false); this.fillAlpha = fillAlpha; }
         public int getFillAlpha() { return fillAlpha; }
         public void setFillAlpha(int value) { fillAlpha = value; repaint(); }
         public void setSheen(boolean value) { sheen = value; }
         public void setOutlined(boolean value) { outlined = value; }
+        public void setGradientTo(Color value) { gradientTo = value; }
         @Override protected void paintComponent(Graphics g) {
             Graphics2D g2 = graphics(g);
             int w = getWidth()-1, h = getHeight()-1; Color fill = getBackground();
-            if (fillAlpha < 255) {
+            if (gradientTo != null) {
+                Color top = fillAlpha < 255 ? new Color(fill.getRed(), fill.getGreen(), fill.getBlue(), fillAlpha) : fill;
+                Color bottom = fillAlpha < 255 ? new Color(gradientTo.getRed(), gradientTo.getGreen(), gradientTo.getBlue(), fillAlpha) : gradientTo;
+                g2.setPaint(new GradientPaint(0, 0, top, 0, Math.max(1, h), bottom));
+                g2.fillRoundRect(0, 0, w, h, 20, 20);
+            } else if (fillAlpha < 255) {
                 g2.setColor(new Color(fill.getRed(), fill.getGreen(), fill.getBlue(), Math.max(0, fillAlpha)));
                 g2.fillRoundRect(0, 0, w, h, 20, 20);
             } else { g2.setColor(fill); g2.fillRoundRect(0, 0, w, h, 20, 20); }
@@ -180,17 +222,21 @@ public final class Theme {
                 g2.fillRoundRect(1, 1, w-1, h-1, 19, 19);
             }
             if (outlined) {
-                Color line = fillAlpha < 255 ? new Color(SEA_HORIZON.getRed(), SEA_HORIZON.getGreen(), SEA_HORIZON.getBlue(), 78) : BORDER_COLOR;
+                Color line = fillAlpha < 255 ? new Color(SEA_HORIZON.getRed(), SEA_HORIZON.getGreen(), SEA_HORIZON.getBlue(), 78)
+                        : blend(gradientTo != null ? gradientTo : fill, Color.WHITE, .17f);
                 g2.setColor(line); g2.drawRoundRect(0, 0, w, h, 20, 20);
             }
             g2.dispose(); super.paintComponent(g);
         }
     }
-    /** Title text with a foam-to-cyan gradient and an optional light sweep, for the sea screens. */
+    /** Title text with a two-tone gradient and an optional light sweep, for the sea screens. */
     public static class SeaTitle extends JLabel {
         private boolean shimmer;
+        private Color from = SEA_FOAM, to = new Color(120, 226, 226);
         public SeaTitle(String text, Font font) { super(text); setFont(font); setForeground(SEA_FOAM); }
+        public SeaTitle(String text, Font font, Color from, Color to) { this(text, font); this.from = from; this.to = to; }
         public void setShimmer(boolean value) { shimmer = value; }
+        public void setGradient(Color top, Color bottom) { from = top; to = bottom; repaint(); }
         @Override public void paintComponent(Graphics g) {
             Graphics2D g2 = graphics(g);
             FontMetrics metrics = g2.getFontMetrics(getFont());
@@ -210,7 +256,7 @@ public final class Theme {
                 g2.setClip(clip);
             }
             g2.setColor(SEA_ABYSS); g2.setFont(getFont()); g2.drawString(text, x + 1, y + 1);
-            g2.setPaint(new GradientPaint(x, y - metrics.getAscent(), SEA_FOAM, x, y + metrics.getDescent(), new Color(120, 226, 226)));
+            g2.setPaint(new GradientPaint(x, y - metrics.getAscent(), from, x, y + metrics.getDescent(), to));
             g2.drawString(text, x, y);
             g2.dispose();
         }

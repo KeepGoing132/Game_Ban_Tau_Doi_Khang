@@ -200,6 +200,19 @@ public class StorageManager {
     public synchronized List<MatchRecord> getMatchRecords() {return new ArrayList<>(matches.values());}
     public synchronized int getPendingCount() {return pending.size();}
 
+    /** Finished matches of one account, newest first; used by the match-history view. */
+    public synchronized List<MatchRecord> historyFor(int userId,final int limit) {
+        List<MatchRecord> mine=new ArrayList<>();
+        for(MatchRecord r:matches.values())if(r.getPlayer1Id()==userId || r.getPlayer2Id()==userId)mine.add(r);
+        Collections.sort(mine,new Comparator<MatchRecord>() {
+            public int compare(MatchRecord a,MatchRecord b) {
+                long left=a.getEndedAt()>0?a.getEndedAt():a.getTimestamp(), right=b.getEndedAt()>0?b.getEndedAt():b.getTimestamp();
+                return Long.compare(right,left);
+            }
+        });
+        return mine.size()>limit?new ArrayList<>(mine.subList(0,limit)):mine;
+    }
+
     /** Pending forfeits stay blocked until persisted, even if their minute has elapsed. */
     public synchronized Map<String,Object> penaltyInfo(User user) {
         long until=user.getMatchmakingBlockedUntil();boolean awaitingSave=false;

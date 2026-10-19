@@ -90,6 +90,21 @@ public class BoardGridPanel extends Theme.RoundedPanel {
     public static String coordinate(int x,int y){return String.valueOf((char)('A'+x))+(y+1);}
     public void setCaption(String text){statusLabel.setText(text);}
     public void setFleet(java.util.List<common.model.Ship> fleet){for(int x=0;x<10;x++)for(int y=0;y<10;y++)fleetCells[x][y]=null;if(fleet!=null)for(common.model.Ship ship:fleet)for(Coordinate c:ship.getCoordinates()){fleetCells[c.getX()][c.getY()]=ship;setCellState(c.getX(),c.getY(),CellState.SHIP);}repaint();}
+    /** Publishes the enemy fleet after the match: untouched water becomes ship, impact marks stay. */
+    public void revealFleet(java.util.List<common.model.Ship> fleet){
+        if(fleet==null)return;
+        for(int x=0;x<10;x++)for(int y=0;y<10;y++)fleetCells[x][y]=null;
+        for(common.model.Ship ship:fleet)for(Coordinate c:ship.getCoordinates())fleetCells[c.getX()][c.getY()]=ship;
+        for(common.model.Ship ship:fleet)for(Coordinate c:ship.getCoordinates())
+            if(cellStates[c.getX()][c.getY()]==CellState.WATER)setCellState(c.getX(),c.getY(),CellState.SHIP);
+        repaint();
+    }
+    /** Copies the visible marks of another board, for the after-action report. */
+    public void mirrorStates(BoardGridPanel source){
+        if(source==null)return;
+        for(int x=0;x<10;x++)for(int y=0;y<10;y++)setCellState(x,y,source.getCellState(x,y));
+        repaint();
+    }
     public void setCompact(boolean value){
         compact=value;setBorder(new EmptyBorder(value?6:16,value?6:16,value?6:16,value?6:16));
         titleLabel.setFont(value?Theme.FONT_SMALL:Theme.FONT_HEADER);
@@ -151,8 +166,10 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         g.setColor(new Color(Theme.SEA_HORIZON.getRed(),Theme.SEA_HORIZON.getGreen(),Theme.SEA_HORIZON.getBlue(),78));
         g.drawRoundRect(0,0,w-1,h-1,20,20);
         g.clip(new RoundRectangle2D.Double(1,1,w-2,h-2,19,19));
-        g.setPaint(new GradientPaint(0,0,new Color(32,124,162,206),0,h,new Color(5,26,52,224)));
+        g.setPaint(new GradientPaint(0,0,new Color(36,172,188,204),0,h*0.55f,new Color(22,104,168,214)));
         g.fillRect(1,1,w-2,h-2);
+        g.setPaint(new GradientPaint(0,h*0.55f,new Color(22,104,168,214),0,h,new Color(24,34,96,226)));
+        g.fillRect(1,(int)(h*0.55),w-2,h-(int)(h*0.55));
         paintDepthContours(g,w,h,0);
         if(!compact)OceanScene.paintCompassRose(g,w*0.13,h*0.87,Math.min(w,h)*0.055,0);
         g.dispose();
@@ -254,7 +271,7 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             Graphics2D g=Theme.graphics(waterTile);g.setColor(Theme.CELL_WATER);g.fillRect(0,0,Math.max(1,w-1),Math.max(1,h-1));g.dispose();return waterTile;}
         BufferedImage tile=new BufferedImage(w,h,BufferedImage.TYPE_INT_ARGB);
         Graphics2D g=Theme.graphics(tile);
-        g.setPaint(new GradientPaint(0,0,new Color(104,198,226,62),(float)(w*.4),h,new Color(14,54,96,96)));
+        g.setPaint(new GradientPaint(0,0,new Color(126,236,226,58),(float)(w*.4),h,new Color(18,68,132,94)));
         g.fillRoundRect(0,0,w-1,h-1,5,5);
         g.setColor(new Color(214,246,255,26));
         int wy=h*2/3;g.drawLine(w/4,wy,w/2,wy);g.drawLine(w/2,wy+2,w*3/4,wy+2);

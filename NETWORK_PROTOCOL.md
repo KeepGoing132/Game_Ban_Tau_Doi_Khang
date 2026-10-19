@@ -39,6 +39,7 @@ Các số x/y/size/user ID/turn_id phải là JSON integer, không phải chuỗ
 | BOT_MATCH_REQ | difficulty: EASY/MEDIUM/HARD | BOT_MATCH_RESP rồi MATCH_FOUND có practice=true và opponent_id âm |
 | GET_ONLINE_USERS_REQ | {} | ONLINE_USERS_RESP: users[] |
 | GET_LEADERBOARD_REQ | {} | LEADERBOARD_RESP: leaderboard[], rank và các trường public user |
+| GET_MATCH_HISTORY_REQ | target_user_id (0 = chính mình), limit (1–50, mặc định 20) | MATCH_HISTORY_RESP: user_id, username, total_games/wins/points, matches[] mới nhất trước |
 | CREATE_ROOM_REQ | {} | CREATE_ROOM_RESP: room_code, room_id |
 | JOIN_ROOM_REQ | room_code | JOIN_ROOM_RESP: room_id, match_id hoặc ERROR |
 | LEAVE_ROOM_REQ | match_id khi có trận; room_id khi phòng chờ | LEAVE_ROOM_RESP |
@@ -65,6 +66,8 @@ Ships schema:
 {"id":"CARRIER","size":5,"coordinates":[{"x":0,"y":0},{"x":1,"y":0},{"x":2,"y":0},{"x":3,"y":0},{"x":4,"y":0}]}
 ```
 
+Lịch sử đấu (`MATCH_HISTORY_RESP`) chỉ chứa dữ liệu công khai của từng trận đã lưu: `match_id`, `opponent_id`, `opponent_name`, `won`, `points` (điểm người được hỏi nhận), `shots`, `duration_seconds`, `reason`, `ended_at_ms`, `legacy`. Không có tọa độ tàu trong lịch sử. Chỉ socket đã đăng nhập gọi được; `target_user_id=0` là tài khoản của chính socket, tài khoản đã xóa trả về tên ẩn danh.
+
 Mảng ships phải có đủ năm tàu theo [5,4,3,3,2], ID riêng biệt, tọa độ nguyên và hình học liên tục. ID tàu không rỗng, tối đa 64 ký tự. Payload sai không thay board đã nhận. Client đợi PLACE_SHIPS_RESP rồi mới Ready.
 
 ## Events
@@ -82,13 +85,15 @@ Mảng ships phải có đủ năm tàu theo [5,4,3,3,2], ID riêng biệt, tọ
 | FIRE_RESULT | match_id, room_id, turn_id đã xử lý, shooter_id, target_id, coordinate:{x,y}, result, remaining_ships_target, next_turn_player_id; SUNK thêm sunk_ship_coords và sunk_ship_name |
 | TURN_CHANGE | match_id, room_id, turn_id mới, current_turn_player_id, deadline_ms, time_limit_sec |
 | TIMEOUT_NOTIFY | match_id, room_id, turn_id cũ, player_id, deadline_ms, action=LOSE_TURN; không auto_x/auto_y |
-| MATCH_END | match_id, room_id, winner_id, loser_id, reason, duration_seconds, player1_shots, player2_shots, scores, storage_saved, expires_at_ms |
+| MATCH_END | match_id, room_id, winner_id, loser_id, reason, duration_seconds, player1_shots, player2_shots, scores, storage_saved, expires_at_ms, opponent_ships[] của đối phương, opponent_shots |
 | REMATCH_NOTIFY | match_id, requester_id, expires_at_ms |
 | REMATCH_START | previous_match_id, match_id mới, room_id |
 | ROOM_USER_LEFT | match_id, room_id, message; cả hai trở lại sảnh |
 | ERROR_NOTIFY | error_code, message, match_id nếu liên quan |
 
 scores map khóa user ID dạng String; mỗi value có points_awarded, total_points, total_wins, total_games và các trường public user. `points_awarded` là thay đổi điểm có dấu: thắng +3, thua bình thường 0, SURRENDER/DISCONNECTED từ −3 đến 0 tùy tổng điểm trước trận. Rời trận RUNNING bị cấm ghép 60 giây. Khi storage_saved=false, điểm chưa được áp dụng và points_awarded=0; server retry mỗi giây, sau commit broadcast thống kê mới. Rematch bị chặn trong thời gian chưa lưu xong.
+
+`opponent_ships` dùng đúng schema ships ở trên và là bản duy nhất được phép rời server sau khi trận kết thúc: mỗi người chơi chỉ nhận hạm đội của đối phương, gửi kèm MATCH_END để client vẽ lại bàn cờ và bảng báo cáo sau trận. Trong lúc trận đang chạy (PLACING/RUNNING) server tuyệt đối không gửi tọa độ tàu của đối phương.
 
 turn_id bắt đầu 1, tăng sau từng phát bắn hợp lệ (kể cả HIT/SUNK giữ người bắn) và timeout. Deadline quyết định bằng nanoTime; deadline_ms và server_time_ms dùng cho UI. Timer callback kiểm tra trạng thái + turn_id; FIRE sát hạn dùng cùng khóa match. FIRE sau hạn không được tạo phát bắn. Không có TURN_CHANGE sau phát kết thúc trận.
 

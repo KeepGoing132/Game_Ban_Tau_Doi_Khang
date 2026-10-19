@@ -99,6 +99,12 @@ public class ClientHandler implements Runnable {
             case BOT_MATCH_REQ:lobby.startBotMatch(this,JsonUtil.getString(d,"difficulty",""));break;
             case GET_ONLINE_USERS_REQ:reply(new Message(MessageType.ONLINE_USERS_RESP).put("users",users.getOnlineUsersList()));break;
             case GET_LEADERBOARD_REQ:reply(new Message(MessageType.LEADERBOARD_RESP).put("leaderboard",users.getLeaderboard()));break;
+            case GET_MATCH_HISTORY_REQ:{
+                int target=JsonUtil.getInt(d,"target_user_id",0);
+                int limit=JsonUtil.getInt(d,"limit",20);
+                Map<String,Object> history=users.matchHistory(this,target,limit);
+                Message response=new Message(MessageType.MATCH_HISTORY_RESP);
+                response.setData(history);reply(response);break;}
             case CREATE_ROOM_REQ: lobby.createRoom(this);break;
             case JOIN_ROOM_REQ: lobby.joinRoom(JsonUtil.getString(d,"room_code",""),this);break;
             case LEAVE_ROOM_REQ:lobby.leave(this,msg,"SURRENDER");break;
@@ -139,6 +145,7 @@ public class ClientHandler implements Runnable {
             case SURRENDER_REQ:return MessageType.SURRENDER_RESP;
             case REMATCH_REQ:return MessageType.REMATCH_RESP;
             case REMATCH_CONFIRM_REQ:return MessageType.REMATCH_CONFIRM_RESP;
+            case GET_MATCH_HISTORY_REQ:return MessageType.MATCH_HISTORY_RESP;
             default:return MessageType.ERROR_NOTIFY;
         }
     }

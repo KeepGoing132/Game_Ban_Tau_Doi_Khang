@@ -173,6 +173,14 @@ Màn hình **Bố trí hạm đội** và **Chiến đấu** được dựng nh�
 
 Cảnh biển vẽ hoàn toàn bằng Java2D (không tài nguyên ngoài), tự giảm tốc khi máy bận và tắt được bằng nút **Sóng biển: Bật/Tắt** trong trận hoặc **Biển động: Bật/Tắt** ở sảnh (lựa chọn được ghi nhớ trên máy). Ảnh và GIF minh họa nằm trong [UI_GUIDE.md](UI_GUIDE.md).
 
+## Lịch sử đấu và xem hạm đội đối thủ
+
+Sảnh có nút **Lịch sử đấu** để xem hồ sơ của chính bạn, và nút **Lịch sử** cạnh **Nhắn tin** để xem hồ sơ của người đang chọn. Cửa sổ hiển thị 20 trận gần nhất với đối thủ, kết quả thắng/thua, điểm nhận, số phát bắn, thời lượng và lý do kết thúc; dữ liệu đọc từ bảng `matches` trên server qua `GET_MATCH_HISTORY_REQ`, client không tự tính kết quả.
+
+Khi trận kết thúc, server gửi kèm hạm đội của đối phương trong `MATCH_END`, nên client công bố ngay hạm đội đó lên bàn cờ và thêm bảng báo cáo sau trận trong hộp kết quả: sơ đồ 10×10 với tàu đối phương, vết trúng `X`, vết trượt `●` và số phát bắn của đối thủ. Suốt trận, tọa độ tàu đối phương vẫn không được gửi về client.
+
+Giao diện cũng được tăng màu: mỗi khu vực một màu nhấn (điểm hổ phách, thắng xanh lá, tỷ lệ xanh da trời, lịch sử hồng tím), thẻ nền chuyển hai màu, bảng tô màu theo cột, nhật ký trận tô màu theo từng phát bắn, và cảnh biển trong trận đổi sang hoàng hôn tím – cam – xanh ngọc.
+
 ## Chat riêng giữa hai người chơi
 
 - Ở sảnh: chọn người trong **Chỉ huy trực tuyến** rồi bấm **Nhắn tin**. Có thể đổi người nhận trong danh sách trên khung chat; danh sách cũng chứa các cuộc trò chuyện gần đây, kể cả người đã offline.

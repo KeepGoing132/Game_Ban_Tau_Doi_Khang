@@ -82,8 +82,18 @@ public class SwingSmoke {
             ClientController shooter=first.get()==a?b:a;int[] sizes={5,4,3,3,2};
             for(int y=0;y<5;y++)for(int x=0;x<sizes[y];x++){final int cx=x,cy=y;edt(()->{Object battle=field(shooter,"battlePanel");Object grid=field(battle,"oppBoardGrid");((JButton[][])field(grid,"cellButtons"))[cx][cy].doClick(0);clickField(battle,"btnFire");clickField(battle,"btnFire");});waitFor(()->{Object battle=field(shooter,"battlePanel");return !(Boolean)field(battle,"pendingShot")&&!((BattlePanel)battle).isAnimating();},"shot ack");if(y==1&&x==3)edt(()->snapshot((Component)field(shooter,"gameWindow"),dir.resolve("battle-active.png")));}
             waitFor(()->(Boolean)field(field(a,"battlePanel"),"finished") && (Boolean)field(field(b,"battlePanel"),"finished"),"game over dialogs");waitFor(()->field(field(a,"battlePanel"),"resultDialog")!=null&&field(field(b,"battlePanel"),"resultDialog")!=null,"result after final explosion");TestRunner.check(server.getStorage().getMatchRecords().size()==1,"GUI fast clicks score once");
+            // Both sides receive the enemy fleet with the end message, so the report can show it.
+            edt(()->{
+                @SuppressWarnings("unchecked") java.util.List<common.model.Ship> revealed=(java.util.List<common.model.Ship>)field(field(shooter,"battlePanel"),"revealedFleet");
+                TestRunner.check(revealed!=null && revealed.size()==5,"end of match releases the enemy fleet");
+                int cells=0;for(common.model.Ship ship:revealed)cells+=ship.getCoordinates().size();
+                TestRunner.check(cells==17,"released fleet carries all 17 ship cells");
+                int[] fleetSizes=new int[revealed.size()];for(int i=0;i<fleetSizes.length;i++)fleetSizes[i]=revealed.get(i).getSize();java.util.Arrays.sort(fleetSizes);
+                TestRunner.check(java.util.Arrays.equals(fleetSizes,new int[]{2,3,3,4,5}),"released fleet has the standard ship sizes");
+            });
             edt(()->snapshot((Component)field(field(shooter,"battlePanel"),"resultDialog"),dir.resolve("result.png")));
-            String old=(String)field(a,"matchId");edt(()->{button((Container)field(field(a,"battlePanel"),"resultDialog"),"Rematch").doClick(0);button((Container)field(field(b,"battlePanel"),"resultDialog"),"Rematch").doClick(0);});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel") && !old.equals(field(a,"matchId")),"GUI rematch new session");
+            String old=(String)field(a,"matchId");
+            edt(()->{button((Container)field(field(a,"battlePanel"),"resultDialog"),"Rematch").doClick(0);button((Container)field(field(b,"battlePanel"),"resultDialog"),"Rematch").doClick(0);});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel") && !old.equals(field(a,"matchId")),"GUI rematch new session");
             arrange(a);arrange(b);edt(()->{clickField(field(a,"placementPanel"),"btnReady");clickField(field(b,"placementPanel"),"btnReady");});waitFor(()->present(a,"battlePanel") && present(b,"battlePanel"),"second battle timer alive");
             edt(()->{JFrame frame=(JFrame)field(a,"gameWindow");SwingUtilities.invokeLater(()->frame.dispatchEvent(new WindowEvent(frame,WindowEvent.WINDOW_CLOSING)));});chooseConfirm();waitFor(()->!present(a,"gameWindow") && !present(b,"gameWindow"),"running window exit cleanup");
             edt(()->{
@@ -92,6 +102,24 @@ public class SwingSmoke {
                 TestRunner.check(((JLabel)field(lobby,"lblPenalty")).isVisible(),"cooldown banner is visible");
                 TestRunner.check(((User)field(a,"currentUser")).getTotalPoints()==0,"surrender score is reflected in lobby");
                 snapshot((Component)lobby,dir.resolve("penalty.png"));
+            });
+            // Match history: asked for from the lobby, after the rematch round is over.
+            // a closed the window, so a's newest row is a surrender while the first battle was
+            // decided by sinking the fleet, whichever side happened to shoot first.
+            edt(()->a.requestMatchHistory(0));
+            waitFor(()->{for(Window w:Window.getWindows())if(w instanceof MatchHistoryDialog && w.isShowing())return true;return false;},"match history dialog");
+            edt(()->{
+                String opponentName=((User)field(b,"currentUser")).getUsername();
+                for(Window w:Window.getWindows())if(w instanceof MatchHistoryDialog && w.isShowing()){
+                    JTable history=((MatchHistoryDialog)w).rows();
+                    TestRunner.check(history.getRowCount()==2,"history lists both finished matches");
+                    TestRunner.check("THUA".equals(history.getValueAt(0,2)),"newest row marks the surrender as a loss");
+                    TestRunner.check(opponentName.equals(history.getValueAt(0,1)),"history names the opponent");
+                    TestRunner.check("Một bên rời trận".equals(history.getValueAt(0,6)),"newest row explains the surrender");
+                    TestRunner.check("Đánh chìm toàn bộ hạm đội".equals(history.getValueAt(1,6)),"older row explains the finished battle");
+                    snapshot(w,dir.resolve("match-history.png"));
+                    w.dispose();return;
+                }
             });
             edt(b::requestLeaderboard);waitFor(()->{for(Window w:Window.getWindows())if(w instanceof LeaderboardDialog && w.isShowing()){snapshot(w,dir.resolve("leaderboard.png"));w.dispose();return true;}return false;},"leaderboard dialog");
             server.stop();waitFor(()->!present(a,"currentUser") && !present(b,"currentUser"),"server death responsive UI");

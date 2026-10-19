@@ -2,6 +2,8 @@
 
 Giao diện Java Swing thống nhất với nền xanh tím, biển xanh, tàu tím, điểm nhấn ngọc lam/cam, trạng thái cảnh báo màu hổ phách và kết quả bắn màu san hô. Minh họa radar và bàn cờ được vẽ bằng Java2D, không cần thư viện hay tải tài nguyên từ Internet.
 
+Bảng màu ngoài trận được mở rộng: mỗi khu vực có màu nhấn riêng (điểm vàng hổ phách, trận thắng xanh lá, tỷ lệ thắng xanh da trời, lịch sử hồng tím, bảng xếp hạng vàng/bạc/đồng), thẻ dùng nền chuyển hai màu, bảng biểu tô màu theo cột và nhật ký trận tô màu theo kết quả từng phát bắn.
+
 **Hai màn hình trong trận được dựng thành cảnh biển động** (xem [mục Ra khơi](#ra-khơi-hiệu-ứng-và-giao-diện-biển-trong-trận)): nền sóng cuộn, hiệu ứng sóng quét khi vào trận, bàn cờ là mặt nước có lưới ánh sáng và sonar, cùng âm thanh sóng biển.
 
 ## Luồng chơi
@@ -40,6 +42,8 @@ Vào trận với người thật sẽ tự chọn đối thủ và thu gọn kh
 | Chiến đấu và nhật ký | [battle-active.png](docs/ui/battle-active.png) |
 | Kết quả trận | [result.png](docs/ui/result.png) |
 | Bảng xếp hạng | [leaderboard.png](docs/ui/leaderboard.png) |
+| Lịch sử đấu | [match-history.png](docs/ui/match-history.png) |
+| Báo cáo hạm đội sau trận | [result-report.png](docs/ui/result-report.png) |
 
 Ảnh cửa sổ nhỏ: [đăng nhập](docs/ui/login-small.png), [sảnh](docs/ui/lobby-small.png), [xếp tàu](docs/ui/placement-small.png), [chiến đấu](docs/ui/battle-small.png).
 
@@ -58,6 +62,14 @@ Hai màn hình trong trận (**Triển khai hạm đội** và **Chiến đấu*
 Ảnh hiệu ứng: [vào trận (GIF)](docs/ui/sea-intro.gif), [vào trận – bố trí tàu (GIF)](docs/ui/sea-intro-placement.gif), [tấm biển RA KHƠI](docs/ui/sea-intro-5.png), [sóng quét qua](docs/ui/sea-intro-9.png), [tàu chạy ngang](docs/ui/sea-intro-13.png), [nước bắn khi trượt](docs/ui/battle-splash.png), [đạn bay](docs/ui/bomb-flight.png), [tàu chìm](docs/ui/ship-sunk.png), [toàn bộ hiệu ứng (GIF)](docs/ui/bomb-animation.gif), [xem trước đặt tàu](docs/ui/placement-preview.png).
 
 Cảnh biển được tối ưu để không tranh CPU với giao diện: khung hình trung bình khoảng 15 ms (trước tối ưu là 63 ms), các lớp tĩnh được nướng sẵn vào ảnh cache, ô nước dùng một ảnh viên gạch dùng lại, và bộ đếm khung hình **tự giảm tốc** khi mỗi khung hình vượt quá nửa khoảng thời gian cho phép, khi cửa sổ không được chọn hoặc khi cửa sổ đang được đổi kích thước. Nếu máy quá yếu, tắt Sóng biển là đủ.
+
+## Lịch sử đấu và báo cáo sau trận
+
+**Lịch sử đấu.** Nút **03 Lịch sử đấu** ở sảnh mở hồ sơ của chính bạn; chọn một chỉ huy trong danh sách trực tuyến rồi bấm **Lịch sử** để xem hồ sơ của người đó. Cửa sổ hiển thị điểm, số trận thắng và số trận đã đấu trên ba thẻ màu, kèm bảng 20 trận gần nhất: thời gian, đối thủ, kết quả **THẮNG** (xanh lá) hoặc **THUA** (đỏ san hô), điểm nhận, số phát bắn, thời lượng và lý do kết thúc (đánh chìm toàn bộ hạm đội, một bên rời trận, mất kết nối). Dữ liệu lấy từ bảng `matches` trong SQLite trên server qua `GET_MATCH_HISTORY_REQ`; client không tự tính kết quả.
+
+**Xem tàu đối thủ khi trận kết thúc.** Khi trận đấu kết thúc, server gửi kèm hạm đội của đối phương trong `MATCH_END` (`opponent_ships`). Ngay lúc đó client công bố hạm đội đó lên bàn cờ đối thủ: những ô chưa bị bắn hiện hình tàu, còn ô đã bắn giữ nguyên vết trúng/trượt/chìm. Hộp kết quả trận thêm bảng **HẠM ĐỘI ĐỐI THỦ • CÔNG BỐ SAU TRẬN**: sơ đồ 10×10 vẽ tàu đối phương cùng toàn bộ vết bắn, chú thích `X` là trúng và `●` là trượt, kèm số phát bắn của đối thủ. Trước khi trận kết thúc, tọa độ tàu đối phương không bao giờ được gửi về client.
+
+Ảnh: [lịch sử đấu](docs/ui/match-history.png), [báo cáo hạm đội sau trận](docs/ui/result-report.png).
 
 ## Chạy và kiểm tra
 
@@ -78,7 +90,7 @@ Kiểm thử GUI bao gồm: kiểm tra cổng không hợp lệ, đăng nhập, 
 
 Kiểm thử phạt rời trận kiểm tra khóa các nút, đếm ngược, đăng xuất/đăng nhập lại, khởi động lại server và mở khóa khi đủ 60 giây bằng đồng hồ kiểm thử. `PenaltyTests` còn kiểm tra trừ điểm về 0, yêu cầu lặp, mất kết nối, lỗi lưu và retry.
 
-`Theme.java` tập trung màu sắc, kiểu chữ, nút, thẻ, bảng và thanh cuộn. `NavalArt.java` chứa minh họa Java2D. `OceanScene.java` vẽ cảnh biển và hiệu ứng vào trận, `OceanPanel.java` là lớp nền cho hai màn hình trong trận, `SeaDecor.java` là các phụ kiện (la bàn, sonar, thước độ sâu, dải chân trời), `WaveProgress.java` là thanh thời gian hình ống nước. Cần build client và server cùng phiên bản để hiển thị đầy đủ hình phạt.
+`Theme.java` tập trung màu sắc, kiểu chữ, nút, thẻ, bảng và thanh cuộn. `NavalArt.java` chứa minh họa Java2D. `MatchHistoryDialog.java` là cửa sổ lịch sử đấu, `FleetReport.java` vẽ sơ đồ hạm đội sau trận. `OceanScene.java` vẽ cảnh biển và hiệu ứng vào trận, `OceanPanel.java` là lớp nền cho hai màn hình trong trận, `SeaDecor.java` là các phụ kiện (la bàn, sonar, thước độ sâu, dải chân trời), `WaveProgress.java` là thanh thời gian hình ống nước. Cần build client và server cùng phiên bản để hiển thị đầy đủ hình phạt.
 
 ## Bản nâng cấp màu sắc, hiệu ứng và luyện tập
 

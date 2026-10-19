@@ -10,7 +10,9 @@ try {
     if ($version -notmatch 'javac 1\.8\.') { $flags += @('--release', '8', '-Xlint:-options') }
     & javac @flags @sources
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    $javaFlags = @('-Dfile.encoding=UTF-8','-Dbattleship.idle_ms=2500','-Dbattleship.heartbeat_ms=500','-Dbattleship.invite_ms=700','-Dbattleship.rematch_ms=1500')
+    # Short rematch window so GUI runs stay fast, but long enough that the result dialog, its
+    # after-action report and the screenshot taken from it all fit before the offer expires.
+    $javaFlags = @('-Dfile.encoding=UTF-8','-Dbattleship.idle_ms=2500','-Dbattleship.heartbeat_ms=500','-Dbattleship.invite_ms=700','-Dbattleship.rematch_ms=4000')
     if (-not $RealTimer) { $javaFlags += '-Dbattleship.turn_ms=700' }
     $testArgs = @('-cp', ('"' + $testBuild + ';' + (Join-Path $PSScriptRoot 'lib/*') + '"'), 'tests.TestRunner')
     if ($ChatGui) { $testArgs += 'chatgui' } elseif ($Chat) { $testArgs += 'chat' } elseif ($Visual) { $testArgs += 'visual' } elseif ($Ocean) { $testArgs += 'ocean' } elseif ($Gui) { $testArgs += 'gui' }
