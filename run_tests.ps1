@@ -1,4 +1,4 @@
-param([switch]$RealTimer, [switch]$Gui, [switch]$SelfTestFailure, [switch]$Visual, [switch]$Chat, [switch]$ChatGui)
+param([switch]$RealTimer, [switch]$Gui, [switch]$SelfTestFailure, [switch]$Visual, [switch]$Ocean, [switch]$Chat, [switch]$ChatGui)
 $ErrorActionPreference = 'Stop'
 $testBuild = Join-Path $env:TEMP ('battleship-tests-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $testBuild | Out-Null
@@ -13,7 +13,7 @@ try {
     $javaFlags = @('-Dfile.encoding=UTF-8','-Dbattleship.idle_ms=2500','-Dbattleship.heartbeat_ms=500','-Dbattleship.invite_ms=700','-Dbattleship.rematch_ms=1500')
     if (-not $RealTimer) { $javaFlags += '-Dbattleship.turn_ms=700' }
     $testArgs = @('-cp', ('"' + $testBuild + ';' + (Join-Path $PSScriptRoot 'lib/*') + '"'), 'tests.TestRunner')
-    if ($ChatGui) { $testArgs += 'chatgui' } elseif ($Chat) { $testArgs += 'chat' } elseif ($Visual) { $testArgs += 'visual' } elseif ($Gui) { $testArgs += 'gui' }
+    if ($ChatGui) { $testArgs += 'chatgui' } elseif ($Chat) { $testArgs += 'chat' } elseif ($Visual) { $testArgs += 'visual' } elseif ($Ocean) { $testArgs += 'ocean' } elseif ($Gui) { $testArgs += 'gui' }
     if ($SelfTestFailure) { $testArgs += 'fail' }
     $process = Start-Process java -ArgumentList ($javaFlags + $testArgs) -PassThru -NoNewWindow
     $processHandle = $process.Handle

@@ -30,6 +30,16 @@ public final class Theme {
     public static final Color CELL_HIT = new Color(168, 68, 80);
     public static final Color CELL_MISS = new Color(27, 53, 89);
     public static final Color CELL_SUNK = new Color(85, 47, 89);
+    // Sea palette used by the in-match screens: sky, open water, foam and wet glass.
+    public static final Color SEA_SKY_TOP = new Color(8, 24, 46);
+    public static final Color SEA_SKY_LOW = new Color(38, 92, 128);
+    public static final Color SEA_SUN = new Color(255, 214, 150);
+    public static final Color SEA_HORIZON = new Color(126, 202, 226);
+    public static final Color SEA_MID = new Color(17, 79, 122);
+    public static final Color SEA_DEEP = new Color(7, 34, 64);
+    public static final Color SEA_ABYSS = new Color(4, 18, 38);
+    public static final Color SEA_FOAM = new Color(226, 246, 255);
+    public static final Color SEA_GLASS = new Color(9, 28, 52);
     private static final String UI_FONT = availableFont(Font.SANS_SERIF, "Segoe UI", "Helvetica Neue", "Arial");
     private static final String MONO_FONT = availableFont(Font.MONOSPACED, "Consolas", "Menlo", "DejaVu Sans Mono");
     public static final Font FONT_TITLE = new Font(UI_FONT, Font.BOLD, 28);
@@ -76,6 +86,10 @@ public final class Theme {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         return g2;
+    }
+    /** Off-screen surface with the same quality hints, for cached layers and sprites. */
+    public static Graphics2D graphics(BufferedImage image) {
+        return graphics(image.createGraphics());
     }
     public static void styleButton(JButton button, Color background, Color foreground) {
         if(button.getClientProperty("audio") == null){button.putClientProperty("audio",true);button.addActionListener(e->GameAudio.play(GameAudio.Sound.CLICK));}
@@ -134,13 +148,71 @@ public final class Theme {
         JPanel p = new RoundedPanel(color);
         p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
     }
+    /** A card that stays see-through so the animated sea behind it remains readable. */
+    public static JPanel glassCard(int padding) { return glassCard(SEA_GLASS, 156, padding); }
+    public static JPanel glassCard(Color base, int alpha, int padding) {
+        JPanel p = new RoundedPanel(base, alpha);
+        p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
+    }
+    /** In-match card: wet glass sheen, horizon-tinted outline, optional wave line under the title. */
+    public static JPanel seaCard(int alpha, int padding) {
+        RoundedPanel p = new RoundedPanel(SEA_GLASS, alpha); p.setSheen(true);
+        p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
+    }
     public static class RoundedPanel extends JPanel {
-        public RoundedPanel(Color color) { setBackground(color); setOpaque(false); }
+        private int fillAlpha = 255;
+        private boolean sheen, outlined = true;
+        public RoundedPanel(Color color) { this(color, 255); }
+        public RoundedPanel(Color color, int fillAlpha) { setBackground(color); setOpaque(false); this.fillAlpha = fillAlpha; }
+        public int getFillAlpha() { return fillAlpha; }
+        public void setFillAlpha(int value) { fillAlpha = value; repaint(); }
+        public void setSheen(boolean value) { sheen = value; }
+        public void setOutlined(boolean value) { outlined = value; }
         @Override protected void paintComponent(Graphics g) {
             Graphics2D g2 = graphics(g);
-            g2.setColor(getBackground()); g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20);
-            g2.setColor(BORDER_COLOR); g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20);
+            int w = getWidth()-1, h = getHeight()-1; Color fill = getBackground();
+            if (fillAlpha < 255) {
+                g2.setColor(new Color(fill.getRed(), fill.getGreen(), fill.getBlue(), Math.max(0, fillAlpha)));
+                g2.fillRoundRect(0, 0, w, h, 20, 20);
+            } else { g2.setColor(fill); g2.fillRoundRect(0, 0, w, h, 20, 20); }
+            if (sheen) {
+                g2.setPaint(new GradientPaint(0, 0, new Color(255, 255, 255, 28), 0, Math.max(1, h / 2), new Color(255, 255, 255, 0)));
+                g2.fillRoundRect(1, 1, w-1, h-1, 19, 19);
+            }
+            if (outlined) {
+                Color line = fillAlpha < 255 ? new Color(SEA_HORIZON.getRed(), SEA_HORIZON.getGreen(), SEA_HORIZON.getBlue(), 78) : BORDER_COLOR;
+                g2.setColor(line); g2.drawRoundRect(0, 0, w, h, 20, 20);
+            }
             g2.dispose(); super.paintComponent(g);
+        }
+    }
+    /** Title text with a foam-to-cyan gradient and an optional light sweep, for the sea screens. */
+    public static class SeaTitle extends JLabel {
+        private boolean shimmer;
+        public SeaTitle(String text, Font font) { super(text); setFont(font); setForeground(SEA_FOAM); }
+        public void setShimmer(boolean value) { shimmer = value; }
+        @Override public void paintComponent(Graphics g) {
+            Graphics2D g2 = graphics(g);
+            FontMetrics metrics = g2.getFontMetrics(getFont());
+            String text = getText(); if (text == null || text.isEmpty()) { g2.dispose(); return; }
+            int x = getInsets().left, y = (getHeight() - metrics.getHeight()) / 2 + metrics.getAscent();
+            if (shimmer) {
+                double sweep = (System.nanoTime() / 1e9 % 6.0) / 6.0;
+                int span = Math.max(1, metrics.stringWidth(text));
+                g2.setPaint(new GradientPaint(x, 0, SEA_FOAM, x + span, 0, PRIMARY));
+                int edge = x + (int) (sweep * span * 1.6) - span / 3;
+                Shape clip = g2.getClip();
+                g2.setColor(new Color(255, 255, 255, 120));
+                if (edge + 90 > x && edge < x + span) {
+                    g2.clipRect(edge, 0, 90, getHeight());
+                    g2.setFont(getFont()); g2.drawString(text, x, y);
+                }
+                g2.setClip(clip);
+            }
+            g2.setColor(SEA_ABYSS); g2.setFont(getFont()); g2.drawString(text, x + 1, y + 1);
+            g2.setPaint(new GradientPaint(x, y - metrics.getAscent(), SEA_FOAM, x, y + metrics.getDescent(), new Color(120, 226, 226)));
+            g2.drawString(text, x, y);
+            g2.dispose();
         }
     }
     public static void styleField(JTextField field) {
@@ -200,6 +272,12 @@ public final class Theme {
                 setBorder(new EmptyBorder(0,12,0,12)); return this;
             }
         });
+    }
+    /** Lets the sea behind a scrollable list show through instead of painting a panel colour. */
+    public static void transparentScroll(JScrollPane scroll) {
+        Color clear = new Color(0, 0, 0, 0);
+        scroll.setOpaque(false); scroll.setBackground(clear);
+        scroll.getViewport().setOpaque(false); scroll.getViewport().setBackground(clear);
     }
     public static JScrollPane scroll(Component component) {
         JScrollPane s = new JScrollPane(component); s.setBorder(BorderFactory.createEmptyBorder());

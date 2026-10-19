@@ -2,6 +2,8 @@
 
 Giao diện Java Swing thống nhất với nền xanh tím, biển xanh, tàu tím, điểm nhấn ngọc lam/cam, trạng thái cảnh báo màu hổ phách và kết quả bắn màu san hô. Minh họa radar và bàn cờ được vẽ bằng Java2D, không cần thư viện hay tải tài nguyên từ Internet.
 
+**Hai màn hình trong trận được dựng thành cảnh biển động** (xem [mục Ra khơi](#ra-khơi-hiệu-ứng-và-giao-diện-biển-trong-trận)): nền sóng cuộn, hiệu ứng sóng quét khi vào trận, bàn cờ là mặt nước có lưới ánh sáng và sonar, cùng âm thanh sóng biển.
+
 ## Luồng chơi
 
 1. **Đăng nhập:** nhập máy chủ, cổng, tên chỉ huy và mật khẩu. Nhãn và ô nhập được căn cùng lề, form cân giữa theo chiều dọc. Có kiểm tra dữ liệu ngay trên form và nút hiện mật khẩu; bỏ phần tài khoản mẫu cùng dòng chú thích bên dưới. Nhấn Enter để đăng nhập. Tên mới được server tạo thành tài khoản theo quy tắc hiện có.
@@ -41,6 +43,22 @@ Vào trận với người thật sẽ tự chọn đối thủ và thu gọn kh
 
 Ảnh cửa sổ nhỏ: [đăng nhập](docs/ui/login-small.png), [sảnh](docs/ui/lobby-small.png), [xếp tàu](docs/ui/placement-small.png), [chiến đấu](docs/ui/battle-small.png).
 
+## Ra khơi: hiệu ứng và giao diện biển trong trận
+
+Hai màn hình trong trận (**Triển khai hạm đội** và **Chiến đấu**) được dựng như đang ở ngoài biển. Toàn bộ cảnh biển được vẽ bằng Java2D trong `OceanScene.java`, không dùng ảnh hay thư viện ngoài, và chạy theo một đồng hồ chung (`OceanPanel.java`) nên mọi lớp sóng, bọt và ánh sáng luôn khớp nhau.
+
+- **Nền biển sống:** bầu trời chuyển sắc, mặt trời và quầng sáng, mây trôi, đảo xa và thuyền buồm ở đường chân trời, năm lớp sóng cuộn với bọt nước ở từng đỉnh, cột nắng chiếu xuống nước, vệt nắng lấp lánh trên mặt biển, hải âu lượn và bọt khí nổi từ đáy.
+- **Hiệu ứng vào trận:** khi màn hình xuất hiện, một con sóng lớn quét qua toàn màn hình kèm bọt và tia nước, đồng thời tấm biển kính trượt vào giữa với tiêu đề **RA KHƠI** (bố trí tàu) hoặc **VÀO TRẬN** (chiến đấu), có la bàn, màn sonar, tàu khu trục chạy ngang để lại vệt bọt và các vòng sonar lan ra. Hiệu ứng kéo dài 2,45 giây, không chặn thao tác: bàn cờ vẫn bấm được, nút Khai hỏa vẫn hoạt động trong lúc sóng đang quét.
+- **Bàn cờ là mặt nước:** nền bàn cờ là nước chuyển sắc có đường bình độ hải đồ, hoa la bàn và đường sóng; các ô là những viên kính trong suốt nên thấy được dòng nước chảy bên dưới, kèm lưới ánh sáng (caustics) và vòng sonar quét qua lưới. Bắn trượt để lại vệt nước bắn bốn tia; bắn trúng lóe sáng; tàu chìm tối dần và sủi bọt khí.
+- **Hiệu ứng bắn:** quả đạn bay theo vòng cung có khói và vệt lửa, điểm xuất phát có bọt nước; khi chạm: bắn trượt thì **cột nước bắn lên**, vòng bọt lan trên mặt nước và hàng chục giọt nước; bắn trúng thì cầu lửa, mũ bọt trắng, mảnh vỡ và khói; đánh chìm có thêm biển **ĐÁNH CHÌM!** kèm đường sóng.
+- **Bảng điều khiển kiểu tàu:** đồng hồ lượt nằm trong màn sonar có điểm sáng, thanh thời gian là **ống nước** rút dần (`WaveProgress.java`), nhật ký hải chiến chạy ngang dưới bàn cờ kèm thước đo độ sâu, mỗi màn hình có la bàn và dòng trạng thái biển đổi theo thời gian (ví dụ “Sóng cấp 3 • Gió Bắc • Tầm nhìn 9 hải lý”).
+- **Âm thanh:** thêm tiếng sóng vỗ, tiếng nước bắn (`SPLASH`), tiếng sóng lớn khi vào trận (`WAVE`) và tiếng sonar (`PING`); nhạc nền trận đấu được thay bằng tiếng sóng biển bốn giây lặp liền mạch.
+- **Tắt hiệu ứng:** nút **Sóng biển: Bật/Tắt** trong trận và **Biển động: Bật/Tắt** ở sảnh. Khi tắt, cảnh biển vẫn còn nhưng đứng yên, không tốn CPU; lựa chọn được ghi nhớ trong `Preferences`.
+
+Ảnh hiệu ứng: [vào trận (GIF)](docs/ui/sea-intro.gif), [vào trận – bố trí tàu (GIF)](docs/ui/sea-intro-placement.gif), [tấm biển RA KHƠI](docs/ui/sea-intro-5.png), [sóng quét qua](docs/ui/sea-intro-9.png), [tàu chạy ngang](docs/ui/sea-intro-13.png), [nước bắn khi trượt](docs/ui/battle-splash.png), [đạn bay](docs/ui/bomb-flight.png), [tàu chìm](docs/ui/ship-sunk.png), [toàn bộ hiệu ứng (GIF)](docs/ui/bomb-animation.gif), [xem trước đặt tàu](docs/ui/placement-preview.png).
+
+Cảnh biển được tối ưu để không tranh CPU với giao diện: khung hình trung bình khoảng 15 ms (trước tối ưu là 63 ms), các lớp tĩnh được nướng sẵn vào ảnh cache, ô nước dùng một ảnh viên gạch dùng lại, và bộ đếm khung hình **tự giảm tốc** khi mỗi khung hình vượt quá nửa khoảng thời gian cho phép, khi cửa sổ không được chọn hoặc khi cửa sổ đang được đổi kích thước. Nếu máy quá yếu, tắt Sóng biển là đủ.
+
 ## Chạy và kiểm tra
 
 ```powershell
@@ -51,20 +69,23 @@ Vào trận với người thật sẽ tự chọn đối thủ và thu gọn kh
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Gui -RealTimer
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Ocean   # chỉ render cảnh biển + hiệu ứng vào trận
 ```
 
 Kiểm thử GUI bao gồm: kiểm tra cổng không hợp lệ, đăng nhập, tạo/vào phòng bằng mã chữ thường, mời đấu, tìm/hủy trận, xem trước tàu và xóa preview, xoay tàu, đặt tàu ngoài biên, xếp ngẫu nhiên, đặt lại, sẵn sàng/hủy sẵn sàng, chọn tọa độ, bắn trượt đổi lượt, bắn trúng/đánh chìm, chống gửi lặp, kết quả, chơi lại, xác nhận rời trận, bảng xếp hạng, mất server và kết nối lại.
 
+`OceanVisualTests` (chế độ `-Ocean`, cũng chạy trong `-Gui`) render lại cảnh biển và hiệu ứng vào trận, kiểm tra hiệu ứng tự kết thúc, không chặn bắn, bàn cờ vẫn bấm được trong lúc sóng quét, nút bật/tắt sóng dừng và chạy lại đồng hồ biển, và đồng hồ biển dừng khi rời màn hình.
+
 Kiểm thử phạt rời trận kiểm tra khóa các nút, đếm ngược, đăng xuất/đăng nhập lại, khởi động lại server và mở khóa khi đủ 60 giây bằng đồng hồ kiểm thử. `PenaltyTests` còn kiểm tra trừ điểm về 0, yêu cầu lặp, mất kết nối, lỗi lưu và retry.
 
-`Theme.java` tập trung màu sắc, kiểu chữ, nút, thẻ, bảng và thanh cuộn. `NavalArt.java` chứa minh họa Java2D. Cần build client và server cùng phiên bản để hiển thị đầy đủ hình phạt.
+`Theme.java` tập trung màu sắc, kiểu chữ, nút, thẻ, bảng và thanh cuộn. `NavalArt.java` chứa minh họa Java2D. `OceanScene.java` vẽ cảnh biển và hiệu ứng vào trận, `OceanPanel.java` là lớp nền cho hai màn hình trong trận, `SeaDecor.java` là các phụ kiện (la bàn, sonar, thước độ sâu, dải chân trời), `WaveProgress.java` là thanh thời gian hình ống nước. Cần build client và server cùng phiên bản để hiển thị đầy đủ hình phạt.
 
 ## Bản nâng cấp màu sắc, hiệu ứng và luyện tập
 
 Đã tham khảo mã CSS và ảnh command-deck của StarNet tại commit `54899e5ff3f2b002b457757916b3977818db6fc1`, clone có chọn phần giao diện ở `references/starnet-reference`. Dùng hướng bảng điều khiển và màu nhấn; giao diện Java2D được viết cho Battleship, không chạy shell Tauri hay agent runtime của StarNet. Xem [ghi chú nguồn](THIRD_PARTY_NOTICES.md).
 
 - Bản đồ chính lớn, tự theo mục tiêu đang bị bắn; nút Bản đồ thu nhỏ lưu lựa chọn.
-- Bom bay vòng cung, vệt lửa, vòng nổ và mảnh vỡ khi tàu chìm. Kết quả được server xác nhận trước khi trình diễn; nút bắn chặn gửi lặp trong hiệu ứng.
+- Bom bay vòng cung, vệt lửa, vòng nổ và mảnh vỡ khi tàu chìm; trên nền biển có thêm cột nước bắn, vòng bọt và khói (xem mục Ra khơi). Kết quả được server xác nhận trước khi trình diễn; nút bắn chặn gửi lặp trong hiệu ứng.
 - Âm thanh riêng theo thao tác/sự kiện, có nút tắt trong sảnh và trận.
 - Đấu máy mở bảng chọn ba độ khó. Luyện tập không tính điểm/phạt rời trận.
 - Tài khoản mở hộp xác nhận nhập mật khẩu để xóa tài khoản hiện tại khỏi database.

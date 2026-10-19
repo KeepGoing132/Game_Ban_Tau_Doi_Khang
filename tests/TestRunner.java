@@ -15,8 +15,9 @@ public class TestRunner {
         if(args.length>0 && "chat".equals(args[0])){ChatTests.run();return;}
         if(args.length>0 && "chatgui".equals(args[0])){try{ChatSwingTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
         if(args.length>0 && "visual".equals(args[0])) {try{client.ui.Theme.install();VisualFeatureTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
+        if(args.length>0 && "ocean".equals(args[0])) {try{client.ui.Theme.install();OceanVisualTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
         if(args.length>0 && "gui".equals(args[0])) {
-            try { SwingSmoke.run(); VisualFeatureTests.run(); ChatSwingTests.run(); System.exit(0); }
+            try { SwingSmoke.run(); VisualFeatureTests.run(); ChatSwingTests.run(); OceanVisualTests.run(); System.exit(0); }
             catch(Throwable e) {e.printStackTrace();System.exit(1);}
         }
         Message m = new Message(MessageType.HEARTBEAT_REQ).requestId("test").put("text", "Tiếng Việt\n\"escaped\"");

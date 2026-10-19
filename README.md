@@ -1,6 +1,6 @@
 # Battleship Online
 
-Giao diện **Naval Command**: đăng nhập, phòng chỉ huy, bố trí hạm đội có xem trước, chiến đấu với nhật ký, kết quả và bảng xếp hạng. Xem [hướng dẫn giao diện và ảnh minh họa](UI_GUIDE.md).
+Giao diện **Naval Command**: đăng nhập, phòng chỉ huy, bố trí hạm đội có xem trước, chiến đấu với nhật ký, kết quả và bảng xếp hạng. Hai màn hình trong trận là cảnh biển động có hiệu ứng sóng quét khi vào trận. Xem [hướng dẫn giao diện và ảnh minh họa](UI_GUIDE.md).
 
 Game bắn tàu đối kháng dùng Java SE, Swing và TCP Socket. Server quản lý tài khoản, sảnh, bàn cờ bí mật, lượt bắn, điểm và lịch sử. Giữ stack Java Swing/TCP và nguồn Word của đồ án. Server dùng SQLite JDBC được đóng gói trong `lib/`, không cần cài dịch vụ database riêng.
 
@@ -107,6 +107,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -RealTimer
 # Swing thật + TCP: bấm component trên EDT, kiểm tra toàn luồng và render ảnh
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Gui -RealTimer
 
+# Chỉ render cảnh biển và hiệu ứng vào trận (ảnh PNG + GIF)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Ocean
+
 # Kiểm tra runner báo lỗi đúng: lệnh này CỐ Ý trả exit code 1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -SelfTestFailure
 ```
@@ -162,7 +165,13 @@ Trong sảnh chọn **Đấu máy** rồi chọn Dễ/Vừa/Khó. Đây là luy�
 
 Đến lượt bạn, bản đồ đối thủ được phóng lớn để ngắm bắn; đến lượt đối thủ, bản đồ của bạn được phóng lớn để quan sát. Bật/tắt **Bản đồ thu nhỏ** ở góc trên; lựa chọn được lưu trên máy. Bom bay từ bản đồ nhỏ tới mục tiêu, với tia lửa và vòng nổ khi đánh chìm tàu. Hiệu ứng chỉ hiển thị kết quả server, không đổi luật hoặc kéo dài lượt.
 
-Nút **Âm thanh: Bật/Tắt** có trong sảnh và trận đấu. Âm thanh được tổng hợp tại máy, gồm bấm nút, chọn ô, phóng bom, trượt, trúng, chìm tàu, tới lượt, thắng/thua và âm nền nhẹ. Không cần tải âm thanh từ Internet; máy không có thiết bị âm thanh vẫn chạy game.
+Nút **Âm thanh: Bật/Tắt** có trong sảnh và trận đấu. Âm thanh được tổng hợp tại máy, gồm bấm nút, chọn ô, phóng bom, trượt, trúng, chìm tàu, tới lượt, thắng/thua, tiếng nước bắn, tiếng sóng lớn và tiếng sonar; nền trận đấu là tiếng sóng biển lặp liền mạch. Không cần tải âm thanh từ Internet; máy không có thiết bị âm thanh vẫn chạy game.
+
+## Cảnh biển trong trận
+
+Màn hình **Bố trí hạm đội** và **Chiến đấu** được dựng như đang ở ngoài biển: nền sóng cuộn nhiều lớp có bọt, mặt trời và cột nắng, hải âu, đảo xa và thuyền buồm; bàn cờ là mặt nước trong suốt có lưới ánh sáng, sonar quét qua và thước độ sâu; nhật ký hải chiến chạy ngang dưới bàn cờ. Khi vào trận có hiệu ứng **sóng quét qua màn hình** cùng tấm biển RA KHƠI/VÀO TRẬN, la bàn, tàu khu trục chạy ngang và các vòng sonar lan ra — hiệu ứng không chặn thao tác, bàn cờ và nút bắn vẫn dùng được ngay. Bắn trượt tạo cột nước bắn lên cùng vòng bọt, bắn trúng có cầu lửa và khói, tàu chìm sủi bọt khí.
+
+Cảnh biển vẽ hoàn toàn bằng Java2D (không tài nguyên ngoài), tự giảm tốc khi máy bận và tắt được bằng nút **Sóng biển: Bật/Tắt** trong trận hoặc **Biển động: Bật/Tắt** ở sảnh (lựa chọn được ghi nhớ trên máy). Ảnh và GIF minh họa nằm trong [UI_GUIDE.md](UI_GUIDE.md).
 
 ## Chat riêng giữa hai người chơi
 

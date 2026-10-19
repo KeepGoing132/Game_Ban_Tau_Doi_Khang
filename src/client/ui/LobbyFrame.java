@@ -58,6 +58,8 @@ public class LobbyFrame extends JFrame {
         JButton guide=Theme.button("03   Cách chơi",false);guide.setFont(Theme.FONT_SMALL);guide.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));guide.addActionListener(e->showGuide());Theme.addStack(sidebar,guide,0);
         sidebar.add(Box.createVerticalGlue());
         JButton sound=Theme.button(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt",false);sound.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));sound.addActionListener(e->{GameAudio.setEnabled(!GameAudio.isEnabled());sound.setText(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt");});Theme.addStack(sidebar,sound,8);
+        JButton sea=Theme.button(OceanScene.isAnimated()?"Biển động: Bật":"Biển động: Tắt",false);sea.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));sea.setFont(Theme.FONT_SMALL);
+        sea.addActionListener(e->{OceanScene.setAnimated(!OceanScene.isAnimated());sea.setText(OceanScene.isAnimated()?"Biển động: Bật":"Biển động: Tắt");});Theme.addStack(sidebar,sea,8);
         btnAccount.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));btnAccount.addActionListener(e->accountDialog());Theme.addStack(sidebar,btnAccount,8);
         Theme.addStack(sidebar,Theme.badge("●  Đã kết nối",Theme.PRIMARY),16);
         JButton logout=Theme.button("Đăng xuất",false);logout.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));logout.addActionListener(e->controller.logout());Theme.addStack(sidebar,logout,0);root.add(sidebar,BorderLayout.WEST);

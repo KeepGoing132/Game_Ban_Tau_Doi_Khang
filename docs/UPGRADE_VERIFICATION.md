@@ -1,5 +1,16 @@
 # Kiểm chứng bản nâng cấp — 12/10/2026
 
+## Nâng cấp cảnh biển trong trận (màn hình bố trí tàu và chiến đấu)
+
+- Thêm `OceanScene.java` (cảnh biển + hiệu ứng vào trận), `OceanPanel.java` (đồng hồ biển chung, bật/tắt sóng), `SeaDecor.java` (la bàn, sonar, thước độ sâu, dải chân trời) và `WaveProgress.java` (ống nước cho thanh thời gian). Bàn cờ vẽ lại thành mặt nước trong suốt có caustics, sonar và vệt nước bắn. Tất cả bằng Java2D, không thêm thư viện hay tài nguyên ngoài.
+- Hiệu ứng vào trận: sóng quét qua màn hình, tấm biển RA KHƠI/VÀO TRẬN, la bàn, tàu khu trục chạy ngang, vòng sonar. Không chặn thao tác: bàn cờ vẫn bấm và nút Khai hỏa vẫn gửi được trong lúc hiệu ứng đang chạy.
+- Hiệu ứng bắn: cột nước bắn và vòng bọt khi trượt, cầu lửa + mũ bọt + khói khi trúng, sủi bọt khi chìm, biển ĐÁNH CHÌM có đường sóng.
+- Âm thanh: thêm `SPLASH`, `WAVE`, `PING` và nền trận đấu là tiếng sóng biển 4 giây lặp liền mạch; `VisualFeatureTests` vẫn xác nhận 12 âm có dữ liệu PCM khác nhau.
+- Tối ưu: khung hình trung bình 63 ms → 15 ms (cache lớp tĩnh, ảnh viên gạch cho ô nước, bỏ `setCursor` và lớp UI của từng ô, sprite cho caustics/tia nắng, hoãn dựng cache khi cửa sổ đang đổi kích thước) và đồng hồ biển tự giảm tốc khi máy bận hoặc cửa sổ không được chọn.
+- `run_tests.ps1`: PASS toàn bộ protocol/TCP, race, storage fault, migration, penalty, bot và ChatTests.
+- `run_tests.ps1 -Gui -RealTimer`: PASS `SwingSmoke`, `VisualFeatureTests`, `ChatSwingTests` và `OceanVisualTests` (hiệu ứng tự kết thúc, không chặn bắn, bật/tắt sóng dừng–chạy lại đồng hồ, đồng hồ dừng khi rời màn hình, ảnh + GIF render lại). Ảnh ở `docs/ui/sea-intro*.png`, `docs/ui/battle-splash.png`; âm thanh mới ở `docs/audio/`.
+- Lưu ý kiểm thử: chế độ `-RealTimer` (timeout lượt 15 giây) là chế độ đã kiểm chứng. Chế độ test nhanh `-Dbattleship.turn_ms=700` trên máy này bị quá hạn lượt ngay sau khi vào trận (thời gian chụp/ghi ảnh PNG chiếm phần lớn hạn lượt) — lỗi này cũng xảy ra với mã trước khi nâng cấp.
+
 ## Bổ sung chat riêng
 
 - Chat ở sảnh và trong trận, tự chọn đối thủ, thu gọn/mở lại, báo tin chưa đọc, giữ bản nháp, Enter/Shift+Enter và tải lịch sử theo trang. Overlay đã kiểm tra ở cửa sổ tiêu chuẩn và tối thiểu; không đổi kích thước bản đồ.

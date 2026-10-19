@@ -11,7 +11,11 @@ import java.awt.event.ActionEvent;
 import java.util.*;
 import java.util.List;
 
-public class PlacementPanel extends JPanel {
+/**
+ * Fleet deployment, staged at sea: the board floats over living water and the fleet panel is a wet
+ * glass deck. The phase opens with the "cast off" entrance effect.
+ */
+public class PlacementPanel extends OceanPanel {
     public interface ReadyListener { void onReady(List<Ship> ships); }
     private static final String[] SHIP_IDS={"CARRIER","BATTLESHIP","CRUISER_1","CRUISER_2","DESTROYER"};
     private static final String[] SHIP_NAMES={"Tàu sân bay","Thiết giáp hạm","Tuần dương I","Tuần dương II","Khu trục hạm"};
@@ -30,25 +34,37 @@ public class PlacementPanel extends JPanel {
     private final JLabel lblProgress=Theme.label("0 / 5 tàu đã bố trí",Theme.FONT_BOLD,Theme.PRIMARY);
     private final JLabel lblOpponent=Theme.badge("●  Đối thủ đang bố trí",Theme.TEXT_MUTED);
     private final JLabel lblMatch=Theme.muted("Bố trí bí mật. Đối thủ không nhìn thấy tàu của bạn.");
-    private final JProgressBar progress=new JProgressBar(0,5);
+    private final WaveProgress progress=new WaveProgress(0,5);
     private boolean locked,ready,opponentReady,isHorizontal=true;
     private int currentShipIndex,hoverX=-1,hoverY=-1;
     private Runnable cancelReady,leaveListener;
 
     public PlacementPanel(ReadyListener readyListener) {
-        this.readyListener=readyListener;setLayout(new BorderLayout(22,18));setBackground(Theme.BG_DARK);setBorder(new EmptyBorder(24,28,24,28));
-        JPanel header=Theme.transparent(new BorderLayout());JPanel heading=Theme.stack();
-        Theme.addStack(heading,Theme.label("Triển khai hạm đội",Theme.FONT_TITLE,Theme.TEXT_MAIN),5);Theme.addStack(heading,lblMatch,0);header.add(heading,BorderLayout.CENTER);
-        JPanel headerActions=Theme.stack();Theme.addStack(headerActions,btnLeave,12);Theme.addStack(headerActions,lblOpponent,0);btnLeave.addActionListener(e->{if(leaveListener!=null){btnLeave.setEnabled(false);leaveListener.run();}});header.add(headerActions,BorderLayout.EAST);add(header,BorderLayout.NORTH);
+        super(new BorderLayout(22,18),"RA KHƠI","BỐ TRÍ HẠM ĐỘI  •  SẴN SÀNG CHO HẢI CHIẾN");
+        this.readyListener=readyListener;setBorder(new EmptyBorder(24,28,24,28));
+        JPanel header=Theme.transparent(new BorderLayout(18,0));
+        SeaDecor compass=new SeaDecor(SeaDecor.Kind.COMPASS);compass.setPreferredSize(new Dimension(56,56));header.add(compass,BorderLayout.WEST);
+        JPanel heading=Theme.stack();
+        Theme.SeaTitle title=new Theme.SeaTitle("Triển khai hạm đội",Theme.FONT_TITLE);title.setShimmer(true);
+        Theme.addStack(heading,title,5);Theme.addStack(heading,lblMatch,2);
+        SeaDecor rule=new SeaDecor(SeaDecor.Kind.WAVES);rule.setPreferredSize(new Dimension(0,8));rule.setMaximumSize(new Dimension(Integer.MAX_VALUE,8));Theme.addStack(heading,rule,0);
+        header.add(heading,BorderLayout.CENTER);
+        JPanel headerActions=Theme.stack();Theme.addStack(headerActions,btnLeave,10);Theme.addStack(headerActions,lblOpponent,6);Theme.addStack(headerActions,seaState(),0);
+        btnLeave.addActionListener(e->{if(leaveListener!=null){btnLeave.setEnabled(false);leaveListener.run();}});header.add(headerActions,BorderLayout.EAST);add(header,BorderLayout.NORTH);
         gridPanel=new BoardGridPanel("HẢI PHẬN CỦA BẠN",true);gridPanel.setCaption("Rê chuột để xem trước  •  Nhấn R để xoay tàu");add(gridPanel,BorderLayout.CENTER);
-        JPanel side=Theme.createCardPanel();side.setLayout(new BorderLayout(0,14));side.setPreferredSize(new Dimension(328,0));add(side,BorderLayout.EAST);
-        JPanel fleet=Theme.stack();Theme.addStack(fleet,Theme.label("Biên đội của bạn",Theme.FONT_HEADER,Theme.TEXT_MAIN),6);
-        Theme.addStack(fleet,Theme.muted("Chọn tàu, sau đó chọn vị trí trên bản đồ."),14);
+        JPanel side=Theme.seaCard(156,20);side.setLayout(new BorderLayout(0,14));side.setPreferredSize(new Dimension(328,0));add(side,BorderLayout.EAST);
+        JPanel fleet=Theme.stack();
+        JPanel fleetHead=Theme.transparent(new BorderLayout(10,0));
+        SeaDecor scope=new SeaDecor(SeaDecor.Kind.SONAR);scope.setPreferredSize(new Dimension(46,46));fleetHead.add(scope,BorderLayout.WEST);
+        JPanel fleetTitles=Theme.stack();Theme.addStack(fleetTitles,Theme.label("Biên đội của bạn",Theme.FONT_HEADER,Theme.SEA_FOAM),4);
+        Theme.addStack(fleetTitles,Theme.muted("Chọn tàu, sau đó chọn vị trí trên bản đồ."),0);fleetHead.add(fleetTitles,BorderLayout.CENTER);
+        Theme.addStack(fleet,fleetHead,14);
         cbShips.addActionListener(e->{currentShipIndex=cbShips.getSelectedIndex();refreshFleet();preview(hoverX,hoverY);});
         for(int i=0;i<5;i++){
             final int index=i;JButton b=new JButton(){
                 @Override protected void paintComponent(Graphics graphics){
-                    super.paintComponent(graphics);Graphics2D g=Theme.graphics(graphics);g.setColor(locked?Theme.TEXT_MUTED:Theme.PRIMARY);
+                    super.paintComponent(graphics);Graphics2D g=Theme.graphics(graphics);
+                    g.setColor(locked?Theme.TEXT_MUTED:isPlaced(index)?Theme.SEA_FOAM:index==currentShipIndex?Theme.PRIMARY:new Color(150,214,236,150));
                     int start=getWidth()-94;for(int n=0;n<SHIP_SIZES[index];n++)g.fillRoundRect(start+n*13,getHeight()/2-4,10,8,3,3);
                     if(isPlaced(index)){g.setStroke(new BasicStroke(1.6f));g.drawLine(12,getHeight()/2,15,getHeight()/2+3);g.drawLine(15,getHeight()/2+3,21,getHeight()/2-4);}g.dispose();
                 }
@@ -57,16 +73,23 @@ public class PlacementPanel extends JPanel {
             b.setMaximumSize(new Dimension(Integer.MAX_VALUE,44));b.addActionListener(e->cbShips.setSelectedIndex(index));fleetButtons[i]=b;Theme.addStack(fleet,b,7);
         }
         btnRotate.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));btnRotate.addActionListener(e->rotate());Theme.addStack(fleet,btnRotate,12);
-        JPanel tools=Theme.transparent(new GridLayout(1,2,8,0));btnRandom.setFont(Theme.FONT_SMALL);btnReset.setFont(Theme.FONT_SMALL);btnRandom.setBorder(new EmptyBorder(10,8,10,8));btnReset.setBorder(new EmptyBorder(10,8,10,8));btnRandom.addActionListener(e->randomizePlacement());btnReset.addActionListener(e->resetPlacement());tools.add(btnRandom);tools.add(btnReset);tools.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));Theme.addStack(fleet,tools,0);side.add(Theme.scrollPage(fleet,396,Theme.PANEL_BG),BorderLayout.CENTER);
-        JPanel readyArea=Theme.stack();Theme.addStack(readyArea,lblProgress,8);progress.setBorderPainted(false);progress.setForeground(Theme.PRIMARY);progress.setBackground(Theme.PANEL_LIGHT);progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,5));Theme.addStack(readyArea,progress,10);
+        JPanel tools=Theme.transparent(new GridLayout(1,2,8,0));btnRandom.setFont(Theme.FONT_SMALL);btnReset.setFont(Theme.FONT_SMALL);btnRandom.setBorder(new EmptyBorder(10,8,10,8));btnReset.setBorder(new EmptyBorder(10,8,10,8));btnRandom.addActionListener(e->randomizePlacement());btnReset.addActionListener(e->resetPlacement());tools.add(btnRandom);tools.add(btnReset);tools.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));Theme.addStack(fleet,tools,0);
+        JScrollPane fleetScroll=Theme.scrollPage(fleet,396,new Color(0,0,0,0));Theme.transparentScroll(fleetScroll);side.add(fleetScroll,BorderLayout.CENTER);
+        JPanel readyArea=Theme.stack();Theme.addStack(readyArea,lblProgress,8);
+        progress.setPreferredSize(new Dimension(270,10));progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,10));progress.setForeground(Theme.PRIMARY);Theme.addStack(readyArea,progress,10);
         lblInstruction.setPreferredSize(new Dimension(270,44));lblInstruction.setMaximumSize(new Dimension(Integer.MAX_VALUE,44));Theme.addStack(readyArea,lblInstruction,10);
         btnReady.setMaximumSize(new Dimension(Integer.MAX_VALUE,46));btnReady.addActionListener(e->{if(ready){setPending();if(cancelReady!=null)cancelReady.run();}else{setPending();if(readyListener!=null)readyListener.onReady(new ArrayList<>(placedShips));}});Theme.addStack(readyArea,btnReady,0);side.add(readyArea,BorderLayout.SOUTH);
-        JPanel footer=Theme.transparent(new BorderLayout());footer.add(Theme.muted("05 TÀU  /  17 Ô  /  Không được chồng lấn"),BorderLayout.WEST);add(footer,BorderLayout.SOUTH);
+        JPanel footer=Theme.transparent(new BorderLayout(0,6));
+        SeaDecor footerSea=new SeaDecor(SeaDecor.Kind.HORIZON);footerSea.setPreferredSize(new Dimension(0,42));footer.add(footerSea,BorderLayout.NORTH);
+        JPanel footerText=Theme.transparent(new BorderLayout());
+        footerText.add(Theme.label("05 TÀU  /  17 Ô  /  Không được chồng lấn",Theme.FONT_SMALL,Theme.SEA_HORIZON),BorderLayout.WEST);
+        footerText.add(Theme.muted("Hạm đội được niêm phong khi bạn sẵn sàng."),BorderLayout.EAST);
+        footer.add(footerText,BorderLayout.SOUTH);add(footer,BorderLayout.SOUTH);
         gridPanel.setCellClickListener(this::placeCurrentShipAt);gridPanel.setCellHoverListener(this::preview);
         getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke('r'),"rotate");getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke('R'),"rotate");getActionMap().put("rotate",new AbstractAction(){public void actionPerformed(ActionEvent e){rotate();}});
         checkReadyCondition();refreshFleet();
     }
-    public void setMatchInfo(String opponent,Runnable leave){lblMatch.setText("Đối thủ: "+opponent);leaveListener=leave;}
+    public void setMatchInfo(String opponent,Runnable leave){lblMatch.setText("Đối thủ: "+opponent);leaveListener=leave;setIntroSubtitle("BỐ TRÍ HẠM ĐỘI  •  ĐỐI THỦ: "+opponent);}
     public void setCancelReadyListener(Runnable listener){cancelReady=listener;}
     private void rotate(){if(locked)return;isHorizontal=!isHorizontal;btnRotate.setText(isHorizontal?"Hướng ngang  ↔   [R]":"Hướng dọc  ↕   [R]");preview(hoverX,hoverY);}
     private boolean canPlace(int x,int y){
@@ -81,11 +104,12 @@ public class PlacementPanel extends JPanel {
         if(locked)return;if(!canPlace(x,y)){instruction("Vị trí chưa hợp lệ. Tàu cần nằm trong bản đồ và không chồng lấn.",Theme.DANGER);return;}
         String id=SHIP_IDS[currentShipIndex];List<Coordinate> coords=new ArrayList<>();for(int i=0;i<SHIP_SIZES[currentShipIndex];i++)coords.add(new Coordinate(x+(isHorizontal?i:0),y+(isHorizontal?0:i)));
         placedShips.removeIf(s->s.getId().equals(id));placedShips.add(new Ship(id,SHIP_SIZES[currentShipIndex],coords));hoverX=hoverY=-1;
+        GameAudio.play(GameAudio.Sound.SPLASH);
         for(int i=1;i<=5;i++){int next=(currentShipIndex+i)%5;if(!isPlaced(next)){cbShips.setSelectedIndex(next);break;}}
         refreshGridVisuals();checkReadyCondition();refreshFleet();
     }
     private boolean isPlaced(int index){for(Ship s:placedShips)if(s.getId().equals(SHIP_IDS[index]))return true;return false;}
-    private void refreshFleet(){for(int i=0;i<5;i++)if(fleetButtons[i]!=null){JButton b=fleetButtons[i];b.setText(SHIP_NAMES[i]);b.setBackground(i==currentShipIndex?new Color(34,71,76):Theme.PANEL_LIGHT);b.setForeground(i==currentShipIndex?Theme.PRIMARY:Theme.TEXT_MAIN);b.setEnabled(!locked);b.repaint();}}
+    private void refreshFleet(){for(int i=0;i<5;i++)if(fleetButtons[i]!=null){JButton b=fleetButtons[i];b.setText(SHIP_NAMES[i]);b.setBackground(i==currentShipIndex?new Color(18,86,106):isPlaced(i)?new Color(14,58,88):new Color(11,42,70));b.setForeground(i==currentShipIndex?Theme.PRIMARY:Theme.TEXT_MAIN);b.setEnabled(!locked);b.repaint();}}
     public void randomizePlacement(){
         if(locked)return;placedShips.clear();Random random=new Random();Set<Coordinate> occupied=new HashSet<>();
         for(int i=0;i<5;i++)for(int attempt=0;attempt<1000;attempt++){
