@@ -12,12 +12,15 @@ public class TestRunner {
     }
     public static void main(String[] args) throws Exception {
         if(args.length>0 && "fail".equals(args[0]))throw new AssertionError("Intentional runner failure probe");
+        if(args.length>0 && "upgrade".equals(args[0])){UpgradeTests.run();System.exit(0);}
+        if(args.length>0 && "upgradegui".equals(args[0])){try{UpgradeSwingTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
+        if(args.length>0 && "package".equals(args[0])){try{PackageSmoke.run(java.nio.file.Paths.get("dist").toAbsolutePath());System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
         if(args.length>0 && "chat".equals(args[0])){ChatTests.run();return;}
         if(args.length>0 && "chatgui".equals(args[0])){try{ChatSwingTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
         if(args.length>0 && "visual".equals(args[0])) {try{client.ui.Theme.install();VisualFeatureTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
         if(args.length>0 && "ocean".equals(args[0])) {try{client.ui.Theme.install();OceanVisualTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}
         if(args.length>0 && "gui".equals(args[0])) {
-            try { SwingSmoke.run(); VisualFeatureTests.run(); ChatSwingTests.run(); OceanVisualTests.run(); System.exit(0); }
+            try { SwingSmoke.run(); VisualFeatureTests.run(); ChatSwingTests.run(); OceanVisualTests.run(); UpgradeSwingTests.run(); System.exit(0); }
             catch(Throwable e) {e.printStackTrace();System.exit(1);}
         }
         Message m = new Message(MessageType.HEARTBEAT_REQ).requestId("test").put("text", "Tiếng Việt\n\"escaped\"");
@@ -36,12 +39,14 @@ public class TestRunner {
         rejects("{\"type\":\"LOGIN_REQ\",\"a\":\"\\q\"}");
         rejects("{\"type\":\"LOGIN_REQ\",\"a\":01}");
         System.out.println("PASS protocol strict JSON + UTF-8");
+        AudioTests.run();
         IntegrationTests.run();
-        DomainTests.run();
-        PenaltyTests.run();
+        DomainTests.run();        PenaltyTests.run();
         RaceTests.run();
         FeatureTests.run();
+        ReplayTests.run();
         ChatTests.run();
+        UpgradeTests.run();
         long end=System.nanoTime()+java.util.concurrent.TimeUnit.SECONDS.toNanos(3);
         while(hasServerThreads() && System.nanoTime()<end)Thread.sleep(10);
         check(!hasServerThreads(),"server-owned executors terminated");

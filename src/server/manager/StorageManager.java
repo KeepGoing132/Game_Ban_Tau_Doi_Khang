@@ -14,6 +14,7 @@ public class StorageManager {
     private final Path directory;
     private final Path snapshot;
     private SqliteStore database;
+    private ResultJournal journal;
     private final Map<String, User> userByUsername = new LinkedHashMap<>();
     private final Map<Integer, User> userById = new LinkedHashMap<>();
     private final Map<String, MatchRecord> matches = new LinkedHashMap<>();
@@ -50,7 +51,28 @@ public class StorageManager {
                 }
                 writeSnapshot(userMaps(), matchMaps());
             }
+            journal = new ResultJournal(this.directory.resolve("pending-results"));
+            recoverPendingResults();
         } catch (Exception e) { throw new IllegalStateException("Storage initialization failed; source files preserved: " + e.getMessage(), e); }
+    }
+    private void recoverPendingResults() throws IOException {
+        for (Map<String,Object> payload : journal.pending()) {
+            String id=JsonUtil.getString(payload,"matchId","");
+            if (matches.containsKey(id)) { clearJournal(id); continue; }
+            // Use the same account/result validation as normal database loading.
+            loadMatches(Collections.<Object>singletonList(payload));
+            MatchRecord record=matches.remove(id);
+            pending.put(id,record);
+        }
+        retryPending();
+    }
+    protected void writeJournal(MatchRecord record) throws IOException {
+        journal.stage(record.getMatchId(),JsonUtil.parseObject(JsonUtil.toJson(record)));
+    }
+    protected void completeJournal(String matchId) throws IOException { journal.complete(matchId); }
+    private void clearJournal(String matchId) {
+        try { completeJournal(matchId); }
+        catch (IOException e) { System.err.println("[Journal] Committed result retained for later cleanup: " + matchId); }
     }
     private static String read(Path path) throws IOException { return new String(Files.readAllBytes(path), StandardCharsets.UTF_8); }
     private static List<Object> requiredList(Map<String,Object> root, String key) {
@@ -98,8 +120,62 @@ public class StorageManager {
             r.setPlayer1Points(JsonUtil.getInt(m,"player1Points",r.getWinnerId()==r.getPlayer1Id()?3:0)); r.setPlayer2Points(JsonUtil.getInt(m,"player2Points",r.getWinnerId()==r.getPlayer2Id()?3:0));
             r.setReason(JsonUtil.getString(m,"reason","LEGACY_UNKNOWN")); r.setLegacy(!m.containsKey("startedAt") || JsonUtil.getBoolean(m,"legacy",false));
             r.setMatchmakingBlockedUntil(longValue(m,"matchmakingBlockedUntil"));
+            r.setPlayer1Ships(fleetList(m,"player1Ships"));r.setPlayer2Ships(fleetList(m,"player2Ships"));r.setShotLog(shotList(m,"shotLog"));
             matches.put(r.getMatchId(),r);
         }
+    }
+    /** Fleets and shot logs are optional: records stored before the replay feature simply have none. */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String,Object>> fleetList(Map<String,Object> m,String key) {
+        List<Map<String,Object>> fleet=new ArrayList<>();
+        List<Object> raw=JsonUtil.getList(m,key);
+        if(raw==null)return fleet;
+        for(Object item:raw) {
+            if(!(item instanceof Map))continue;
+            Map<String,Object> ship=(Map<String,Object>)item;
+            String id=JsonUtil.getString(ship,"id","");int size=JsonUtil.getInt(ship,"size",0);
+            List<Map<String,Object>> coords=cells(JsonUtil.getList(ship,"coordinates"));
+            if(id.isEmpty() || id.length()>64 || size<2 || size>5 || coords.size()!=size)continue;
+            Map<String,Object> entry=new LinkedHashMap<>();
+            entry.put("id",id);entry.put("size",size);entry.put("coordinates",coords);fleet.add(entry);
+        }
+        return fleet;
+    }
+    @SuppressWarnings("unchecked")
+    private static List<Map<String,Object>> cells(List<Object> raw) {
+        List<Map<String,Object>> list=new ArrayList<>();
+        if(raw==null)return list;
+        for(Object item:raw) {
+            if(!(item instanceof Map))continue;
+            Map<String,Object> cell=(Map<String,Object>)item;
+            Object x=cell.get("x"),y=cell.get("y");
+            if(!(x instanceof Number) || !(y instanceof Number))continue;
+            int cx=((Number)x).intValue(),cy=((Number)y).intValue();
+            if(cx<0 || cx>9 || cy<0 || cy>9)continue;
+            Map<String,Object> point=new LinkedHashMap<>();point.put("x",cx);point.put("y",cy);list.add(point);
+        }
+        return list;
+    }
+    @SuppressWarnings("unchecked")
+    private static List<Map<String,Object>> shotList(Map<String,Object> m,String key) {
+        List<Map<String,Object>> log=new ArrayList<>();
+        List<Object> raw=JsonUtil.getList(m,key);
+        if(raw==null)return log;
+        for(Object item:raw) {
+            if(!(item instanceof Map))continue;
+            Map<String,Object> shot=(Map<String,Object>)item;
+            Object x=shot.get("x"),y=shot.get("y");
+            if(!(x instanceof Number) || !(y instanceof Number))continue;
+            Map<String,Object> entry=new LinkedHashMap<>();
+            entry.put("turn_id",JsonUtil.getInt(shot,"turn_id",0));
+            entry.put("shooter_id",JsonUtil.getInt(shot,"shooter_id",0));
+            entry.put("x",((Number)x).intValue());entry.put("y",((Number)y).intValue());
+            entry.put("result",JsonUtil.getString(shot,"result","MISS"));
+            List<Map<String,Object>> sunk=cells(JsonUtil.getList(shot,"sunk_ship_coords"));
+            if(!sunk.isEmpty()) {entry.put("sunk_ship_coords",sunk);entry.put("sunk_ship_name",JsonUtil.getString(shot,"sunk_ship_name",""));}
+            log.add(entry);
+        }
+        return log;
     }
     private static long longValue(Map<String,Object> m,String key) { Object v=m.get(key); return v instanceof Number?((Number)v).longValue():0; }
     private void initSamples() {
@@ -116,7 +192,7 @@ public class StorageManager {
         database.write(users,records);
     }
     public synchronized boolean commitResult(MatchRecord record) {
-        if(matches.containsKey(record.getMatchId())) return true;
+        if(matches.containsKey(record.getMatchId())) { clearJournal(record.getMatchId()); return true; }
         MatchRecord queued = pending.get(record.getMatchId());
         if(queued!=null)record=queued;
         User loser = userById.get(record.getLoserId());
@@ -127,6 +203,8 @@ public class StorageManager {
         record.setPlayer1Points(record.getWinnerId()==record.getPlayer1Id()?GameConfig.WIN_POINTS:loserPoints);
         record.setPlayer2Points(record.getWinnerId()==record.getPlayer2Id()?GameConfig.WIN_POINTS:loserPoints);
         pending.putIfAbsent(record.getMatchId(),record);
+        try { writeJournal(record); }
+        catch (IOException e) { System.err.println("[Journal] Result remains in RAM, not yet durable: " + record.getMatchId()); return false; }
         List<Map<String,Object>> users=userMaps();
         for(Map<String,Object> m:users) {
             int id=(Integer)m.get("userId");
@@ -144,8 +222,27 @@ public class StorageManager {
         catch(IOException e) { System.err.println("[Storage] Pending result " + record.getMatchId() + ": " + e.getMessage());return false; }
         userById.get(record.getWinnerId()).addWin(GameConfig.WIN_POINTS);loser.addLoss(loserPoints);
         loser.setMatchmakingBlockedUntil(Math.max(loser.getMatchmakingBlockedUntil(),record.getMatchmakingBlockedUntil()));
-        matches.put(record.getMatchId(),record);pending.remove(record.getMatchId());return true;
+        matches.put(record.getMatchId(),record);pending.remove(record.getMatchId());clearJournal(record.getMatchId());return true;
     }
+    public synchronized void changePassword(User user, String oldPassword, String newPassword) {
+        if (user == null || user.isDeleted() || !PasswordHasher.verify(oldPassword, user.getPassword()))
+            throw new DomainException("AUTH_FAILED", "Mật khẩu hiện tại không đúng");
+        if (newPassword == null || newPassword.trim().isEmpty() || newPassword.length() > 128)
+            throw new DomainException("INVALID_MESSAGE", "Mật khẩu mới cần từ 1 đến 128 ký tự, không chỉ gồm khoảng trắng");
+
+        String hash = PasswordHasher.hash(newPassword);
+        List<Map<String,Object>> staged = userMaps();
+        for (Map<String,Object> account : staged)
+            if (((Number) account.get("userId")).intValue() == user.getUserId())
+                account.put("passwordHash", hash);
+        try {
+            writeSnapshot(staged, matchMaps());
+        } catch (IOException e) {
+            throw new DomainException("STORAGE_ERROR", "Chưa lưu được mật khẩu mới. Hãy thử lại.");
+        }
+        user.setPassword(hash);
+    }
+
     public synchronized void deleteAccount(User user,String password) {
         if(user==null || user.isDeleted() || !PasswordHasher.verify(password,user.getPassword()))throw new DomainException("AUTH_FAILED","Mật khẩu không đúng");
         for(MatchRecord r:pending.values())if(r.getPlayer1Id()==user.getUserId() || r.getPlayer2Id()==user.getUserId())throw new DomainException("STORAGE_ERROR","Hãy chờ lưu kết quả trước khi xóa tài khoản");
@@ -198,7 +295,12 @@ public class StorageManager {
     }
     public synchronized List<User> getAllUsers() {List<User> active=new ArrayList<>();for(User u:userById.values())if(!u.isDeleted())active.add(u);return active;}
     public synchronized List<MatchRecord> getMatchRecords() {return new ArrayList<>(matches.values());}
+    public synchronized MatchRecord findMatch(String matchId) {return matchId==null?null:matches.get(matchId);}
     public synchronized int getPendingCount() {return pending.size();}
+    public synchronized Map<String,Object> historyPage(int userId, HistoryQuery query) {
+        try { return database.history(userId,query); }
+        catch (java.sql.SQLException e) { throw new DomainException("STORAGE_ERROR","Không tải được lịch sử. Hãy thử lại."); }
+    }
 
     /** Finished matches of one account, newest first; used by the match-history view. */
     public synchronized List<MatchRecord> historyFor(int userId,final int limit) {

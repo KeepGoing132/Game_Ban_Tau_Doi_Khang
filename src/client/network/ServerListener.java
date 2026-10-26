@@ -7,4 +7,5 @@ public interface ServerListener
     void onConnected();
     void onDisconnected(String reason);
     void onMessageReceived(Message message);
+    default void onLatencyMeasured(long milliseconds) {}
 }

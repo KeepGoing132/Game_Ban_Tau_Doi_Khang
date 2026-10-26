@@ -110,7 +110,7 @@ Tài liệu này chi tiết hóa trách nhiệm của từng thành viên trong 
 | **TC-05** | Đặt tàu hợp lệ & Sẵn sàng | 1. Cả 2 đặt đủ 5 tàu (17 ô) không bị đè và không ra ngoài bản đồ.<br>2. Cả 2 bấm Ready. | Server thông báo bắt đầu trận đấu, ngẫu nhiên chọn 1 người đi trước và bắt đầu đếm 15s. |
 | **TC-06** | Luật bắn Hit được bắn tiếp, Miss đổi lượt | 1. `userA` có lượt, bắn trúng ô tàu của `userB`.<br>2. Server trả về `HIT`.<br>3. `userA` tiếp tục bắn trượt.<br>4. Server trả về `MISS`. | Sau khi `HIT`, lượt vẫn thuộc `userA`. Sau khi `MISS`, quyền bắn chuyển sang `userB`. |
 | **TC-07** | Xử lý hết giờ (Timeout 15s) | 1. Đến lượt `userA` nhưng không thực hiện bắn.<br>2. Chờ hết 15 giây. | Server phát TIMEOUT_NOTIFY và chuyển lượt cho `userB`, không bắn hộ. |
-| **TC-08** | Thoát giữa trận (Surrender) | 1. Đang trong trận, `userA` bấm nút "Thoát" (hoặc tắt ứng dụng). | `userA` bị xử thua (0đ). `userB` được thông báo chiến thắng (+3đ). Trạng thái giải phóng về sảnh. |
+| **TC-08** | Thoát giữa trận (Surrender) | 1. Đang trong trận, `userA` bấm nút "Thoát" (hoặc tắt ứng dụng). | `userA` bị xử thua, trừ tối đa 3 điểm (sàn 0), khóa ghép 60 giây. `userB` được thông báo chiến thắng (+3đ). Trạng thái giải phóng về sảnh. |
 | **TC-09** | Kết thúc trận & Chơi lại | 1. `userA` bắn chìm toàn bộ 5 tàu của `userB`.<br>2. Cả 2 hiện popup thông báo kết quả.<br>3. Cả 2 cùng bấm "Chơi lại". | `userA` +3 điểm. Cả 2 được đưa về màn hình đặt tàu của trận mới. |
 | **TC-10** | Kiểm tra Bảng xếp hạng | 1. Mở màn hình Bảng xếp hạng từ Client. | Danh sách người chơi hiển thị theo đúng thứ tự: Tổng điểm giảm dần -> Số trận thắng giảm dần -> Win Rate giảm dần. |
 
@@ -130,17 +130,11 @@ Baseline đã chạy: JDK/javac 25.0.1, build thường thành công; `--release
 
 Đã đối chiếu văn bản đề bài và các hàng test trong năm Word, giữ nguyên file gốc. Tên tin Word được ánh xạ trong NETWORK_PROTOCOL.md; JSON theo dòng/data/x/y giữ theo repository; timeout mất lượt theo KHOA-05. Protocol, storage và kiểm thử tích hợp là phần chung.
 
-### Checklist P0 đến P8
+### Phạm vi kiểm chứng lịch sử
 
-- [x] P0: đọc kế hoạch/quy tắc/tài liệu, baseline, thống nhất đặc tả, runner Java có assertion/timeout/exit code; giữ dữ liệu thật và Word.
-- [x] P1: envelope và schema strict, bounded UTF-8 framing, writer queue/watchdog, heartbeat, generation connection, shutdown.
-- [x] P2: auth gate, username/password, PBKDF2/migration, duplicate login giữ chủ cũ, logout ownership, presence snapshot và cleanup.
-- [x] P3: một thao tác pair, room/queue/invite loại trừ, invitation ID/expiry, Accept xác thực, hủy queue/rời phòng.
-- [x] P4: board tạm, fleet validation, Ready ack/cancel/lock, single start, giữ vị trí cũ khi sửa sai, close PLACING.
-- [x] P5: match/turn/deadline guard, Miss/Hit/Sunk, timeout mất lượt, timer cũ inert, kết thúc một lần.
-- [x] P6: atomic users+matches snapshot, import/backup, pending retry, full history/timestamp, stable ranking, rematch phiên mới và expiry/reject cleanup.
-- [x] P7: UI chờ ack và chống click lặp, deadline clock, bỏ event/callback cũ, dọn timer/listener/dialog, kiểm tra Swing thật.
-- [x] P8: TCP bốn client/race/domain/storage/GUI, hướng dẫn build/demo, scripts chạy từ thư mục khác, rà diff; giới hạn LAN/runtime Java 8 ghi riêng.
+Đợt 04/10/2026 bao gồm giao thức/kết nối, xác thực/presence, ghép trận, đặt tàu/Ready, chiến đấu/timer, lưu kết quả/chơi lại, vòng đời giao diện và kiểm thử tích hợp. Bảng lệnh và từng ca kiểm thử bên dưới là bằng chứng của đợt đó, không phải xác nhận cho bản mã hiện tại.
+
+Checklist kế hoạch cũ đã được gỡ. Theo dõi công việc mới tại [PLAN.md](PLAN.md); bổ sung bằng chứng mới theo ngày vào tài liệu này, giữ nguyên kết quả lịch sử.
 
 ### Lệnh và bằng chứng
 
@@ -225,9 +219,32 @@ Test data/build ở `%TEMP%/battleship-*`, server port 0 cấp cổng riêng. Fa
 
 Bộ test có barrier/latch và timeout rõ, fake epoch/nano/Random cho deadline, socket thật cho lệnh ngoài UI. GUI actions gọi component thật trên EDT, không phải test mock controller. Đây là kết quả trong môi trường hiện tại, không phải bằng chứng soak test hoặc mọi cấu hình mạng.
 
-### Giới hạn còn lại
+### Giới hạn tại thời điểm kiểm chứng 04/10/2026
 
 - LAN hai máy và chạy bằng runtime Java 8: NOT-RUN; đã kiểm tra localhost và biên dịch API Java 8.
 - Chưa có soak test dài ngày hoặc kiểm thử Internet/TLS.
-- Kết quả chưa commit khi đĩa lỗi nằm trong RAM; crash lúc đó không bảo đảm lưu được pending, snapshot đã commit vẫn nguyên vẹn.
+- Tại bản 04/10, pending chỉ nằm trong RAM. Giới hạn được cải thiện bằng journal ở bản 26/10, xem bằng chứng mới bên dưới.
 - Không sửa Word, không tự commit/push hoặc xóa dữ liệu thật.
+
+
+## Kết quả hoàn thiện ngày 26/10/2026
+
+Môi trường: Windows, Oracle JDK 25.0.1, biên dịch --release 8; TCP localhost/cổng riêng, database và dữ liệu thử trong TEMP. Không dùng tài khoản hoặc thư mục data thật. Lần thử baseline đầu gặp launcher Oracle javapath treo và giới hạn kết nối của môi trường; sau khi dùng JDK trực tiếp và cho phép TCP, bộ hồi quy hiện có PASS. Không coi đó là bằng chứng baseline nguyên trạng trước mọi chỉnh sửa. Scripts hiện tự tìm JDK nên không cần sửa PATH toàn máy.
+
+| Ngày | Bước | Hành vi/lệnh | Kết quả | Bằng chứng |
+| --- | --- | --- | --- | --- |
+| 26/10/2026 | B0–B1 | run_tests.ps1; đối chiếu luật và tách dispatch/lifecycle | PASS | TCP bốn client, race, domain, storage fault; TC-08 đồng bộ mức phạt hiện tại; bảng luồng trong SYSTEM_ARCHITECTURE.md |
+| 26/10/2026 | B2 | UpgradeTests.passwords; UpgradeSwingTests | PASS | Chưa login/sai mật khẩu/chuỗi rỗng-quá dài/giả target, chặn queue/placement/battle; lỗi ghi giữ hash cũ; request lặp, xác nhận UI, đăng nhập bằng mật khẩu mới và restart |
+| 26/10/2026 | B3 | UpgradeTests.placementClock/presets; tiến trình placement riêng; GUI | PASS | Ready không gia hạn, ranh giới bằng deadline, callback cũ, không tính trận/phạt; hai trận độc lập; 5 mẫu/đổi tên/xóa/isolation/validate; dùng mẫu qua nút thật, khóa Ready và dọn timer |
+| 26/10/2026 | B4 | UpgradeTests.latency; SwingSmoke/UpgradeSwingTests | PASS | Heartbeat tương quan request đo phản hồi trễ; ms hiện trên UI; disconnect/failed connect/relogin, bắn liên tục và rematch trong GUI |
+| 26/10/2026 | B5 | 65 trận lịch sử, trùng timestamp và thêm trận sau trang đầu | PASS | Không bỏ/trùng, cursor đúng bộ lọc; thắng/thua/tên/ngày; GUI tải 20→40, lọc/rỗng/ngày sai; bảng cuộn ngang, tên hồ sơ đủ ở cửa sổ nhỏ |
+| 26/10/2026 | B6 | Runtime.halt trước commit và sau commit/trước dọn journal | PASS | Khởi động lại phục hồi điểm/hình phạt một lần, chat giữ nguyên; chạy lần hai không cộng lại; journal hỏng giữ nguyên và fail closed; tmp chưa công bố được giữ; journal không ghi được thì không báo thành công |
+| 26/10/2026 | B6 | UpgradeTests.pendingResultsOverTcp | PASS | Trận kết thúc trong lỗi SQL báo storage_saved=false; rematch bị từ chối; retry phát RESULT_SAVED_NOTIFY với +3 đúng và chỉ một record |
+| 26/10/2026 | B7 | run_tests.ps1 -RealTimer | PASS | Toàn bộ protocol/TCP/domain/race/storage/bot/chat/replay/âm thanh và nhóm hoàn thiện với lượt thực 15 giây |
+| 26/10/2026 | B7 | run_tests.ps1 -Gui -RealTimer | PASS | SwingSmoke, VisualFeatureTests, ChatSwingTests, OceanVisualTests, UpgradeSwingTests; sau chỉnh bố cục chạy lại -UpgradeGui -RealTimer PASS |
+| 26/10/2026 | B7 | compile.ps1; run_tests.ps1 -Package -RealTimer | PASS | JAR target API Java 8; server JAR/thư viện chạy từ thư mục khác, hai socket chơi/lịch sử; client từ JAR độc lập đăng nhập server JAR |
+| 26/10/2026 | B7 | LAN hai máy vật lý/macOS/runtime Java 8 | NOT-RUN | Không có môi trường đích; không suy ra từ localhost hoặc --release 8 |
+
+Ảnh bản cuối đã xem: docs/ui/completion-password.png, completion-placement.png, completion-history.png, completion-history-small.png. Bản thử GUI toàn luồng còn có ảnh ở TEMP do runner in đường dẫn. Mã kiểm thử mới: UpgradeTests.java, UpgradeSwingTests.java, PackageSmoke.java; đăng ký vào TestRunner và run_tests.ps1. Nhóm đóng gói chạy riêng bằng -Package, cần compile trước.
+
+Các thay đổi mã nguồn/dữ liệu tài liệu có sẵn trong workspace được giữ lại. Không sửa báo cáo Word, không commit/push. B0–B6 hoàn thành; B7 còn nghiệm thu LAN/macOS thực tế. Journal chỉ bảo đảm các kết quả đã ghi bền vững qua crash tiến trình; khi cả journal/database không ghi được vẫn chưa bảo đảm qua crash. Chưa soak test dài ngày hoặc kiểm chứng mất điện/hỏng thiết bị lưu trữ.

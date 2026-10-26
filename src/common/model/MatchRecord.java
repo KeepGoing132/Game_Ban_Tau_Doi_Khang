@@ -1,5 +1,14 @@
 package common.model;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * One finished match. Besides the public result data it keeps the sealed fleets and the ordered
+ * shot log, so the two players can replay their own match from the history: those two lists are
+ * only ever released to the participants of that match.
+ */
 public class MatchRecord {
     private int loserId;
     private String loserName;
@@ -23,10 +32,24 @@ public class MatchRecord {
     private int player1Shots;
     private int player2Shots;
     private long timestamp;
+    /** Fleet layouts in the PLACE_SHIPS schema; filled when the match finishes. */
+    private List<Map<String,Object>> player1Ships = new ArrayList<>();
+    private List<Map<String,Object>> player2Ships = new ArrayList<>();
+    /** Every accepted shot in firing order: turn_id, shooter_id, x, y, result and sunk ship cells. */
+    private List<Map<String,Object>> shotLog = new ArrayList<>();
 
     public MatchRecord() {
         this.timestamp = 0;
     }
+
+    public List<Map<String,Object>> getPlayer1Ships() { return player1Ships; }
+    public void setPlayer1Ships(List<Map<String,Object>> value) { player1Ships = value == null ? new ArrayList<Map<String,Object>>() : value; }
+    public List<Map<String,Object>> getPlayer2Ships() { return player2Ships; }
+    public void setPlayer2Ships(List<Map<String,Object>> value) { player2Ships = value == null ? new ArrayList<Map<String,Object>>() : value; }
+    public List<Map<String,Object>> getShotLog() { return shotLog; }
+    public void setShotLog(List<Map<String,Object>> value) { shotLog = value == null ? new ArrayList<Map<String,Object>>() : value; }
+    /** True when both sealed fleets are stored, i.e. the match can be replayed. */
+    public boolean hasReplay() { return !player1Ships.isEmpty() && !player2Ships.isEmpty(); }
 
     public String getMatchId() {
         return matchId;

@@ -31,7 +31,8 @@ public class PlacementPanel extends OceanPanel {
     private final JButton btnRandom=Theme.button("Xếp ngẫu nhiên",false);
     private final JButton btnReset=Theme.button("Đặt lại",false);
     private final JButton btnReady=Theme.button("Sẵn sàng chiến đấu  →",true);
-    private final JButton btnLeave=Theme.button("←  Về sảnh",false);
+    private final JButton btnLeave=Theme.button("×  THOÁT VỀ SẢNH",false);
+    private final JButton btnSettings=Theme.button("Cài đặt",false);
     private final JLabel lblInstruction=Theme.label(" ",Theme.FONT_SMALL,Theme.TEXT_MUTED);
     private final JLabel lblProgress=Theme.label("0 / 5 tàu đã bố trí",Theme.FONT_BOLD,Theme.PRIMARY);
     private final JLabel lblOpponent=Theme.badge("●  Đối thủ đang bố trí",Theme.TEXT_MUTED);
@@ -40,6 +41,13 @@ public class PlacementPanel extends OceanPanel {
     private boolean locked,ready,opponentReady,isHorizontal=true;
     private int currentShipIndex,hoverX=-1,hoverY=-1;
     private Runnable cancelReady,leaveListener;
+    private client.model.FleetPresets presets;
+    private final JButton btnPresets = Theme.button("Mẫu bố trí (5 ô lưu)", false);
+    private final JLabel lblDeadline = Theme.muted("Đang nhận thời gian chuẩn bị...");
+    private final JLabel lblConnection = Theme.muted("Đang đo kết nối...");
+    private final javax.swing.Timer placementClock = new javax.swing.Timer(200, e -> updatePlacementClock());
+    private long placementEndNanos;
+    private boolean disposed;
 
     public PlacementPanel(ReadyListener readyListener) {
         super(new BorderLayout(22,18),"RA KHƠI","BỐ TRÍ HẠM ĐỘI  •  SẴN SÀNG CHO HẢI CHIẾN");
@@ -51,8 +59,11 @@ public class PlacementPanel extends OceanPanel {
         Theme.addStack(heading,title,5);Theme.addStack(heading,lblMatch,2);
         SeaDecor rule=new SeaDecor(SeaDecor.Kind.WAVES);rule.setPreferredSize(new Dimension(0,8));rule.setMaximumSize(new Dimension(Integer.MAX_VALUE,8));Theme.addStack(heading,rule,0);
         header.add(heading,BorderLayout.CENTER);
-        JPanel headerActions=Theme.stack();Theme.addStack(headerActions,btnLeave,10);Theme.addStack(headerActions,lblOpponent,6);Theme.addStack(headerActions,seaState(),0);
-        btnLeave.addActionListener(e->{if(leaveListener!=null){btnLeave.setEnabled(false);leaveListener.run();}});header.add(headerActions,BorderLayout.EAST);add(header,BorderLayout.NORTH);
+        JPanel headerActions=Theme.stack();Theme.addStack(headerActions,btnLeave,6);Theme.addStack(headerActions,lblOpponent,4);Theme.addStack(headerActions,lblDeadline,4);Theme.addStack(headerActions,lblConnection,4);Theme.addStack(headerActions,seaState(),0);
+        // leaving during deployment is free: no penalty, the room is simply closed for both sides
+        btnLeave.setToolTipText("Rời phòng bố trí và trở về sảnh (ESC)");
+        Theme.styleButton(btnLeave,Theme.CORAL,Theme.BG_DARK);
+        btnLeave.addActionListener(e->leaveNow());header.add(headerActions,BorderLayout.EAST);add(header,BorderLayout.NORTH);
         gridPanel=new BoardGridPanel("HẢI PHẬN CỦA BẠN",true);gridPanel.setCaption("Rê chuột để xem trước  •  Nhấn R để xoay tàu");add(gridPanel,BorderLayout.CENTER);
         JPanel side=Theme.seaCard(156,20);side.setLayout(new BorderLayout(0,14));side.setPreferredSize(new Dimension(328,0));add(side,BorderLayout.EAST);
         JPanel fleet=Theme.stack();
@@ -77,6 +88,8 @@ public class PlacementPanel extends OceanPanel {
         }
         btnRotate.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));btnRotate.addActionListener(e->rotate());Theme.addStack(fleet,btnRotate,12);
         JPanel tools=Theme.transparent(new GridLayout(1,2,8,0));btnRandom.setFont(Theme.FONT_SMALL);btnReset.setFont(Theme.FONT_SMALL);btnRandom.setBorder(new EmptyBorder(10,8,10,8));btnReset.setBorder(new EmptyBorder(10,8,10,8));btnRandom.addActionListener(e->randomizePlacement());btnReset.addActionListener(e->resetPlacement());tools.add(btnRandom);tools.add(btnReset);tools.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));Theme.addStack(fleet,tools,0);
+        btnPresets.setMaximumSize(new Dimension(Integer.MAX_VALUE,40));
+        btnPresets.addActionListener(e -> presetDialog()); Theme.addStack(fleet,btnPresets,0);
         JScrollPane fleetScroll=Theme.scrollPage(fleet,396,new Color(0,0,0,0));Theme.transparentScroll(fleetScroll);side.add(fleetScroll,BorderLayout.CENTER);
         JPanel readyArea=Theme.stack();Theme.addStack(readyArea,lblProgress,8);
         progress.setPreferredSize(new Dimension(270,10));progress.setMaximumSize(new Dimension(Integer.MAX_VALUE,10));progress.setForeground(Theme.MINT);Theme.addStack(readyArea,progress,10);
@@ -86,13 +99,67 @@ public class PlacementPanel extends OceanPanel {
         SeaDecor footerSea=new SeaDecor(SeaDecor.Kind.HORIZON);footerSea.setPreferredSize(new Dimension(0,42));footer.add(footerSea,BorderLayout.NORTH);
         JPanel footerText=Theme.transparent(new BorderLayout());
         footerText.add(Theme.label("05 TÀU  /  17 Ô  /  Không được chồng lấn",Theme.FONT_SMALL,Theme.SEA_HORIZON),BorderLayout.WEST);
-        footerText.add(Theme.muted("Hạm đội được niêm phong khi bạn sẵn sàng."),BorderLayout.EAST);
+        JPanel footerEast=Theme.transparent(new FlowLayout(FlowLayout.RIGHT,12,0));
+        footerEast.add(Theme.muted("Nhấn ESC hoặc nút THOÁT VỀ SẢNH để rời phòng bố trí."));
+        btnSettings.addActionListener(e->SettingsDialog.open(this));footerEast.add(btnSettings);
+        footerText.add(footerEast,BorderLayout.EAST);
         footer.add(footerText,BorderLayout.SOUTH);add(footer,BorderLayout.SOUTH);
         gridPanel.setCellClickListener(this::placeCurrentShipAt);gridPanel.setCellHoverListener(this::preview);
         getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke('r'),"rotate");getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke('R'),"rotate");getActionMap().put("rotate",new AbstractAction(){public void actionPerformed(ActionEvent e){rotate();}});
+        getInputMap(WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke("ESCAPE"),"leave");getActionMap().put("leave",new AbstractAction(){public void actionPerformed(ActionEvent e){leaveNow();}});
         checkReadyCondition();refreshFleet();
     }
     public void setMatchInfo(String opponent,Runnable leave){lblMatch.setText("Đối thủ: "+opponent);leaveListener=leave;setIntroSubtitle("BỐ TRÍ HẠM ĐỘI  •  ĐỐI THỦ: "+opponent);}
+    public void setPresets(client.model.FleetPresets value) { presets = value; }
+    public void setConnectionStatus(String value) { lblConnection.setText(value); }
+    public void setPlacementDeadline(long deadlineMs, long serverTimeMs) {
+        placementEndNanos = System.nanoTime() + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(Math.max(0,deadlineMs-serverTimeMs));
+        updatePlacementClock(); placementClock.start();
+    }
+    private void updatePlacementClock() {
+        if (placementEndNanos == 0 || disposed) return;
+        long seconds = Math.max(0,(placementEndNanos-System.nanoTime()+999999999L)/1000000000L);
+        lblDeadline.setText(seconds == 0 ? "Hết giờ — chờ máy chủ xác nhận" : "Chuẩn bị: " + seconds + " giây");
+        lblDeadline.setForeground(seconds <= 30 ? Theme.CORAL : Theme.MINT);
+        if (seconds == 0) placementClock.stop();
+    }
+    private void presetDialog() {
+        if (locked || presets == null || disposed) return;
+        Map<Integer,String> names = presets.names();
+        String[] slots = new String[5];
+        for (int i=0;i<5;i++) slots[i] = (i+1) + ". " + names.getOrDefault(i,"Ô trống");
+        JComboBox<String> selected = new JComboBox<>(slots);
+        int action = JOptionPane.showOptionDialog(this,selected,"Mẫu bố trí trên máy này",JOptionPane.DEFAULT_OPTION,
+                JOptionPane.PLAIN_MESSAGE,null,new Object[]{"Dùng mẫu","Lưu vào ô","Đổi tên","Xóa","Đóng"},"Dùng mẫu");
+        if (locked || disposed || action < 0 || action > 3) return;
+        int slot = selected.getSelectedIndex();
+        try {
+            if (action == 0) applyPreset(presets.load(slot));
+            else if (action == 1 || action == 2) {
+                String name = JOptionPane.showInputDialog(this,"Tên mẫu (1–32 ký tự)",names.getOrDefault(slot,"Bố trí " + (slot+1)));
+                if (name == null || locked || disposed) return;
+                if (action == 1) presets.save(slot,name,placedShips); else presets.rename(slot,name);
+                showNotice("Đã lưu mẫu bố trí trên máy này.");
+            } else { presets.delete(slot); showNotice("Đã xóa mẫu bố trí."); }
+        } catch (Exception e) { showNotice("Không dùng/lưu được mẫu: " + e.getMessage()); }
+    }
+    public void applyPreset(List<Ship> ships) {
+        if (locked || disposed) return;
+        List<Ship> copy = common.model.FleetLayout.decode(common.model.FleetLayout.encode(ships));
+        List<Ship> normalized = new ArrayList<>();
+        for (int i=0;i<5;i++) {
+            Ship chosen = null;
+            for (Ship ship : copy) if (ship.getSize() == SHIP_SIZES[i]) { chosen=ship; break; }
+            if (chosen == null) throw new IllegalArgumentException("Mẫu thiếu tàu");
+            normalized.add(new Ship(SHIP_IDS[i],SHIP_SIZES[i],chosen.getCoordinates())); copy.remove(chosen);
+        }
+        placedShips.clear(); placedShips.addAll(normalized); hoverX=hoverY=-1;
+        refreshGridVisuals(); checkReadyCondition(); refreshFleet();
+    }
+    public void disposePanel() { disposed=true; placementClock.stop(); disposeOcean(); }
+    @Override public void removeNotify() { placementClock.stop(); super.removeNotify(); }
+    /** Exit to the lobby from the button or from ESC; the request is only sent once. */
+    private void leaveNow(){if(!btnLeave.isEnabled()||leaveListener==null)return;btnLeave.setEnabled(false);instruction("Đang trở về sảnh...",Theme.WARNING);leaveListener.run();}
     public void setCancelReadyListener(Runnable listener){cancelReady=listener;}
     private void rotate(){if(locked)return;isHorizontal=!isHorizontal;btnRotate.setText(isHorizontal?"Hướng ngang  ↔   [R]":"Hướng dọc  ↕   [R]");preview(hoverX,hoverY);}
     private boolean canPlace(int x,int y){
@@ -127,10 +194,10 @@ public class PlacementPanel extends OceanPanel {
     private void instruction(String text,Color color){lblInstruction.setText("<html>"+Theme.html(text)+"</html>");lblInstruction.setForeground(color);}
     private boolean validFleet(){Board board=new Board();board.setShips(placedShips);return board.validateAllShips();}
     private void checkReadyCondition(){boolean valid=validFleet();btnReady.setEnabled(!locked&&valid);progress.setValue(placedShips.size());lblProgress.setText(placedShips.size()+" / 5 tàu đã bố trí");instruction(valid?"Hạm đội đã hoàn tất. Sẵn sàng khi bạn muốn.":"Còn "+(5-placedShips.size())+" tàu cần được bố trí.",valid?Theme.PRIMARY:Theme.TEXT_MUTED);}
-    private void lockControls(){btnRotate.setEnabled(!locked);btnRandom.setEnabled(!locked);btnReset.setEnabled(!locked);cbShips.setEnabled(!locked);gridPanel.setInteractionEnabled(!locked);refreshFleet();refreshGridVisuals();}
+    private void lockControls(){btnPresets.setEnabled(!locked);btnRotate.setEnabled(!locked);btnRandom.setEnabled(!locked);btnReset.setEnabled(!locked);cbShips.setEnabled(!locked);gridPanel.setInteractionEnabled(!locked);refreshFleet();refreshGridVisuals();}
     public void setServerReady(boolean value){ready=value;locked=value;lockControls();btnReady.setText(value?"Hủy sẵn sàng":"Sẵn sàng chiến đấu  →");btnReady.setEnabled(value||validFleet());if(value)instruction(opponentReady?"Cả hai đã sẵn sàng. Đang vào trận...":"Bạn đã sẵn sàng. Chờ đối thủ hoàn tất.",Theme.PRIMARY);else checkReadyCondition();}
     public void setPending(){locked=true;lockControls();btnReady.setEnabled(false);btnReady.setText("Đang xác nhận...");instruction("Đang chờ máy chủ xác nhận hạm đội...",Theme.TEXT_MUTED);}
-    public void showPlacementError(String message){setServerReady(false);instruction(message,Theme.DANGER);btnLeave.setEnabled(true);}
+    public void showPlacementError(String message){setServerReady(ready);instruction(message,Theme.DANGER);btnLeave.setEnabled(true);}
     public void showReadyState(boolean value){opponentReady=value;lblOpponent.setText(value?"●  Đối thủ đã sẵn sàng":"●  Đối thủ đang bố trí");lblOpponent.setForeground(value?Theme.PRIMARY:Theme.TEXT_MUTED);if(ready)instruction(value?"Cả hai đã sẵn sàng. Đang vào trận...":"Bạn đã sẵn sàng. Chờ đối thủ hoàn tất.",Theme.PRIMARY);}
     public void showLeaveError(){btnLeave.setEnabled(true);}
     public void showNotice(String text){instruction(text,Theme.WARNING);}

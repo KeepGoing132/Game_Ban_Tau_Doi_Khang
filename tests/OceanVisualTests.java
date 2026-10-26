@@ -29,6 +29,7 @@ public final class OceanVisualTests {
     private static BattlePanel battle;
     private static PlacementPanel placement;
     private static MatchHistoryDialog historyDialog;
+    private static MatchReplayDialog replayDialog;
 
     public static void run()throws Exception {
         Path dir=DomainTests.empty("battleship-ocean-");
@@ -38,6 +39,8 @@ public final class OceanVisualTests {
             battleScreen(dir);
             placementScreen(dir);
             historyDialog(dir);
+            replayScreen(dir);
+            settingsScreen(dir);
             animationLifecycle(dir);
         } finally {
             SwingSmoke.edt(()->{for(Window w:Window.getWindows())w.dispose();});
@@ -111,11 +114,18 @@ public final class OceanVisualTests {
         Thread.sleep(120);
         SwingSmoke.edt(()->{rewindEffect(battle,0.74);ImageIO.write(grabNow(window),"png",dir.resolve("ship-sunk.png").toFile());});
         SwingSmoke.waitFor(()->!battle.isAnimating(),"sunk effect ends");
-        // The server releases the enemy fleet with the end message: the report must show it.
+        // The server releases the enemy fleet with the end message: the result screen must open its charts.
         List<Ship> enemy=BotBrain.fleet(new Random(11));
-        SwingSmoke.edt(()->battle.showGameOver(true,3,"ALL_SHIPS_DESTROYED",enemy));
+        SwingSmoke.edt(()->battle.showGameOver(true,3,"ALL_SHIPS_DESTROYED",enemy,14,142));
         SwingSmoke.waitFor(()->field(battle,"resultDialog")!=null,"result dialog opens");
-        Thread.sleep(500);
+        JDialog resultWindow=(JDialog)field(battle,"resultDialog");
+        MatchResultView resultView=(MatchResultView)resultWindow.getContentPane();
+        SwingSmoke.edt(()->check(resultView.isUnfolding(),"charts start folded while the headline lands"));
+        List<BufferedImage> resultFrames=new ArrayList<>();
+        for(int i=0;i<34;i++){resultFrames.add(grabWindow(resultWindow));Thread.sleep(100);}
+        writeGif(resultFrames,dir.resolve("result-win-animation.gif"),10);
+        for(int index:new int[]{1,6,13,19,26,33})ImageIO.write(resultFrames.get(index),"png",dir.resolve("result-win-"+(index+1)+".png").toFile());
+        SwingSmoke.waitFor(()->!resultView.isUnfolding(),"charts unfold after the headline");
         SwingSmoke.edt(()->{
             @SuppressWarnings("unchecked") List<Ship> revealed=(List<Ship>)field(battle,"revealedFleet");
             check(revealed!=null && revealed.size()==5,"battle report keeps the released fleet");
@@ -124,13 +134,30 @@ public final class OceanVisualTests {
             for(Ship ship:revealed)for(Coordinate c:ship.getCoordinates()){
                 shipCells++;
                 check(shown.getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"released fleet is painted on the enemy board");
+                check(resultView.enemyChart().getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"unfolded enemy chart shows the released fleet");
             }
             check(shipCells==17,"released fleet covers all 17 ship cells");
+            for(Ship ship:myFleet)for(Coordinate c:ship.getCoordinates())
+                check(resultView.myChart().getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"unfolded own chart shows your own fleet");
+            check(resultView.rematchButton().isEnabled()&&resultView.exitButton().isEnabled(),"result stays usable while it animates");
         });
         SwingSmoke.edt(()->{try{SwingSmoke.snapshot((Component)field(battle,"resultDialog"),dir.resolve("result-report.png"));}catch(Exception e){throw new RuntimeException(e);}});
         SwingSmoke.edt(()->{try{SwingSmoke.snapshot((Component)field(battle,"resultDialog"),dir.resolve("result.png"));}catch(Exception e){throw new RuntimeException(e);}});
         SwingSmoke.edt(()->battle.disposePanel());
         SwingSmoke.edt(()->{window.dispose();window=null;battle=null;});
+        // A defeat must read as clearly as a victory.
+        SwingSmoke.edt(()->{
+            window=new JFrame("Battleship • Thất bại");
+            battle=new BattlePanel("gui_a","gui_b",myFleet,new BattlePanel.BattleActionListener(){
+                public void onFire(int x,int y){}public void onSurrender(){}public void onRematch(){}public void onExitToLobby(){}});
+            Theme.configureWindow(window,1280,860,1120,800);
+            window.setContentPane(battle);window.setLocationRelativeTo(null);window.setVisible(true);
+            battle.showGameOver(false,-3,"SURRENDER",enemy,13,88);
+        });
+        SwingSmoke.waitFor(()->field(battle,"resultDialog")!=null,"defeat result opens");
+        SwingSmoke.waitFor(()->!((MatchResultView)((JDialog)field(battle,"resultDialog")).getContentPane()).isUnfolding(),"defeat charts unfold");
+        SwingSmoke.edt(()->SwingSmoke.snapshot((Component)field(battle,"resultDialog"),dir.resolve("result-lose.png")));
+        SwingSmoke.edt(()->{battle.disposePanel();window.dispose();window=null;battle=null;});
     }
 
     // ------------------------------------------------------------------ deployment screen
@@ -161,9 +188,10 @@ public final class OceanVisualTests {
     // ------------------------------------------------------------------ match history
     private static void historyDialog(Path dir)throws Exception {
         final java.util.Map<String,Object> data=sampleHistory();
+        final List<String> requested=new ArrayList<>();
         // a modal dialog blocks its dispatch thread, so it is opened from invokeLater
         SwingUtilities.invokeLater(()->{
-            MatchHistoryDialog dialog=new MatchHistoryDialog(null,data);
+            MatchHistoryDialog dialog=new MatchHistoryDialog(null,data,requested::add);
             historyDialog=dialog;
             dialog.setVisible(true);
         });
@@ -171,9 +199,23 @@ public final class OceanVisualTests {
         SwingSmoke.edt(()->{
             check(historyDialog.rows().getRowCount()==8,"history lists every finished match");
             check("THẮNG".equals(historyDialog.rows().getValueAt(0,2))||"THUA".equals(historyDialog.rows().getValueAt(0,2)),"history marks the result");
+            check("Xem lại".equals(historyDialog.rows().getValueAt(0,7)),"replayable rows offer the replay");
+            check("—".equals(historyDialog.rows().getValueAt(7,7)),"rows without stored fleets offer nothing to replay");
             SwingSmoke.snapshot(historyDialog,dir.resolve("match-history.png"));
         });
+        // one click on a row asks the server for that very match
+        SwingSmoke.edt(()->{clickRow(historyDialog,0);});
+        check(requested.size()==1&&"M_sample_0".equals(requested.get(0)),"a click opens the replay of that match");
+        // a match recorded before the feature explains itself instead of asking the server
+        SwingSmoke.edt(()->clickRow(historyDialog,7));
+        check(requested.size()==1,"a row without stored fleets never asks the server");
         SwingSmoke.edt(()->{historyDialog.dispose();historyDialog=null;});
+    }
+    private static void clickRow(MatchHistoryDialog dialog,int row){
+        JTable table=dialog.rows();
+        table.setRowSelectionInterval(row,row);
+        table.dispatchEvent(new java.awt.event.MouseEvent(table,java.awt.event.MouseEvent.MOUSE_CLICKED,
+                System.currentTimeMillis(),0,12,12,1,false,java.awt.event.MouseEvent.BUTTON1));
     }
     private static java.util.Map<String,Object> sampleHistory() {
         java.util.Map<String,Object> data=new java.util.LinkedHashMap<>();
@@ -189,10 +231,131 @@ public final class OceanVisualTests {
             row.put("opponent_name",opponents[i]);row.put("won",won);row.put("points",won?3:(i==4?-3:0));
             row.put("shots",18+i*3);row.put("duration_seconds",120+i*37);row.put("reason",reasons[i]);
             row.put("ended_at_ms",base-(long)i*5_400_000L);
+            row.put("match_id","M_sample_"+i);
+            // the two oldest rows predate the replay feature, like real stored data
+            row.put("replay",i<6);
             rows.add(row);
         }
         data.put("matches",rows);
         return data;
+    }
+
+    // ------------------------------------------------------------------ replay screen
+    /** The replay of one match: both sealed fleets plus the shot log, driven shot by shot. */
+    private static void replayScreen(Path dir)throws Exception {
+        List<Ship> mine=BotBrain.fleet(new Random(21)),theirs=BotBrain.fleet(new Random(22));
+        List<Object> log=new ArrayList<>();
+        Set<String> fired=new HashSet<>();
+        // my shots: the first enemy ship goes down, then two shots into empty water
+        List<Coordinate> victim=theirs.get(0).getCoordinates();
+        for(int i=0;i<victim.size();i++){
+            boolean last=i==victim.size()-1;
+            log.add(shot(i+1,7,victim.get(i),last?"SUNK":"HIT",last?victim:null));fired.add(key(victim.get(i)));
+        }
+        int misses=0;
+        for(int x=0;x<10&&misses<2;x++)for(int y=0;y<10&&misses<2;y++){
+            if(occupied(theirs,x,y)||!fired.add(x+":"+y))continue;
+            log.add(shot(20+misses,7,new Coordinate(x,y),"MISS",null));misses++;
+        }
+        // the enemy answers by hitting two cells of my second ship
+        List<Coordinate> myHits=mine.get(1).getCoordinates();
+        for(int i=0;i<2;i++)log.add(shot(30+i,9,myHits.get(i),"HIT",null));
+        Map<String,Object> data=sampleReplay(mine,theirs,log);
+        SwingUtilities.invokeLater(()->{replayDialog=new MatchReplayDialog(null,7,data);replayDialog.setVisible(true);});
+        SwingSmoke.waitFor(()->replayDialog!=null&&replayDialog.isShowing(),"replay screen shown");
+        OceanPanel replayOcean=(OceanPanel)replayDialog.getContentPane();
+        SwingSmoke.waitFor(()->!replayOcean.isIntroPlaying(),"replay entrance effect ends");
+        SwingSmoke.edt(()->{
+            check(replayDialog.shots().getModel().getSize()==log.size(),"shot log lists every recorded shot");
+            for(Coordinate c:victim)check(replayDialog.enemyBoard().getCellState(c.getX(),c.getY())==BoardGridPanel.CellState.SUNK,"replayed enemy chart shows the sunk ship");
+            for(int i=0;i<2;i++)check(replayDialog.myBoard().getCellState(myHits.get(i).getX(),myHits.get(i).getY())==BoardGridPanel.CellState.HIT,"replayed own chart shows the enemy hits");
+            for(Ship ship:mine)for(Coordinate c:ship.getCoordinates())check(replayDialog.myBoard().getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"own fleet is drawn on the replayed chart");
+            // an untouched ship stays a hull, proving the marks are layered over the fleets
+            for(Coordinate c:theirs.get(4).getCoordinates())check(replayDialog.enemyBoard().getCellState(c.getX(),c.getY())==BoardGridPanel.CellState.SHIP,"untouched ships stay visible on the replayed chart");
+            SwingSmoke.snapshot(replayDialog,dir.resolve("match-replay.png"));
+            // stepping back through the log rebuilds both charts up to that shot
+            replayDialog.shots().setSelectedIndex(2);
+        });
+        SwingSmoke.edt(()->{
+            check(replayDialog.shots().getModel().getSize()==3,"picking a shot rewinds the replay to that point");
+            check(replayDialog.enemyBoard().getCellState(victim.get(3).getX(),victim.get(3).getY())==BoardGridPanel.CellState.SHIP,"later shots are removed when the replay is rewound");
+            SwingSmoke.snapshot(replayDialog,dir.resolve("match-replay-early.png"));
+            replayDialog.dispose();replayDialog=null;
+        });
+    }
+    private static String key(Coordinate c){return c.getX()+":"+c.getY();}
+    private static boolean occupied(List<Ship> fleet,int x,int y){
+        for(Ship ship:fleet)if(ship.contains(new Coordinate(x,y)))return true;
+        return false;
+    }
+    private static Map<String,Object> shot(int turn,int shooter,Coordinate c,String result,List<Coordinate> sunk){
+        Map<String,Object> entry=new java.util.LinkedHashMap<>();
+        entry.put("turn_id",turn);entry.put("shooter_id",shooter);entry.put("x",c.getX());entry.put("y",c.getY());entry.put("result",result);
+        if(sunk!=null){List<Object> cells=new ArrayList<>();for(Coordinate cell:sunk){Map<String,Object> point=new java.util.LinkedHashMap<>();point.put("x",cell.getX());point.put("y",cell.getY());cells.add(point);}entry.put("sunk_ship_coords",cells);entry.put("sunk_ship_name","CARRIER");}
+        return entry;
+    }
+    private static Map<String,Object> sampleReplay(List<Ship> mine,List<Ship> theirs,List<Object> log){
+        Map<String,Object> data=new java.util.LinkedHashMap<>();
+        data.put("match_id","M_sample");data.put("opponent_id",9);data.put("opponent_name","thanh_hai");
+        data.put("won",true);data.put("points",3);data.put("reason","ALL_SHIPS_DESTROYED");
+        data.put("duration_seconds",231);data.put("ended_at_ms",System.currentTimeMillis()-3600_000L);
+        data.put("my_shots",countShots(log,7));data.put("opponent_shots",countShots(log,9));
+        data.put("my_ships",fleetOf(mine));data.put("opponent_ships",fleetOf(theirs));data.put("shot_log",log);data.put("replay_available",true);
+        return data;
+    }
+    private static int countShots(List<Object> log,int shooter){
+        int total=0;
+        for(Object item:log){@SuppressWarnings("unchecked") Map<String,Object> shot=(Map<String,Object>)item;if(common.protocol.JsonUtil.getInt(shot,"shooter_id",0)==shooter)total++;}
+        return total;
+    }
+    private static List<Object> fleetOf(List<Ship> fleet){
+        List<Object> list=new ArrayList<>();
+        for(Ship ship:fleet){
+            Map<String,Object> entry=new java.util.LinkedHashMap<>();
+            entry.put("id",ship.getId());entry.put("size",ship.getSize());
+            List<Object> cells=new ArrayList<>();
+            for(Coordinate c:ship.getCoordinates()){Map<String,Object> point=new java.util.LinkedHashMap<>();point.put("x",c.getX());point.put("y",c.getY());cells.add(point);}
+            entry.put("coordinates",cells);list.add(entry);
+        }
+        return list;
+    }
+
+    // ------------------------------------------------------------------ settings screen
+    /** Volume sliders must reach the audio engine, and the dialog must stay reusable. */
+    private static void settingsScreen(Path dir)throws Exception {
+        float master=GameAudio.getMasterVolume();
+        SwingSmoke.edt(()->SettingsDialog.open(null));
+        SwingSmoke.waitFor(()->{for(Window w:Window.getWindows())if(w instanceof SettingsDialog && w.isShowing())return true;return false;},"settings dialog");
+        SwingSmoke.edt(()->{
+            SettingsDialog dialog=null;
+            for(Window w:Window.getWindows())if(w instanceof SettingsDialog)dialog=(SettingsDialog)w;
+            List<JSlider> sliders=new ArrayList<>();
+            collect(dialog,sliders);
+            check(sliders.size()==3,"settings offers master, effects and sea levels");
+            check(sliders.get(0).getValue()==Math.round(GameAudio.getMasterVolume()*100),"master slider starts at the stored level");
+            sliders.get(0).setValue(35);
+            check(Math.abs(GameAudio.getMasterVolume()-.35f)<.01f,"master volume reaches the audio engine");
+            List<JCheckBox> boxes=new ArrayList<>();
+            collectBoxes(dialog,boxes);
+            check(boxes.size()==3,"settings toggles sound, waves and the minimap");
+            SwingSmoke.snapshot(dialog,dir.resolve("settings.png"));
+            dialog.dispose();
+        });
+        // a disposed window stays in Window.getWindows() until it is collected, so only visibility is checked
+        SwingSmoke.waitFor(()->{for(Window w:Window.getWindows())if(w instanceof SettingsDialog && w.isShowing())return false;return true;},"settings closed");
+        SwingSmoke.edt(()->{GameAudio.setMasterVolume(master);check(Math.abs(GameAudio.getMasterVolume()-master)<.01f,"master volume restored after the test");});
+    }
+    private static void collect(Container root,List<JSlider> found){
+        for(Component c:root.getComponents()){
+            if(c instanceof JSlider)found.add((JSlider)c);
+            if(c instanceof Container)collect((Container)c,found);
+        }
+    }
+    private static void collectBoxes(Container root,List<JCheckBox> found){
+        for(Component c:root.getComponents()){
+            if(c instanceof JCheckBox)found.add((JCheckBox)c);
+            if(c instanceof Container)collectBoxes((Container)c,found);
+        }
     }
 
     // ------------------------------------------------------------------ lifecycle checks
@@ -249,13 +412,19 @@ public final class OceanVisualTests {
         started.setAccessible(true);
         started.setLong(panel,System.nanoTime()-(long)(seconds*1e9));
     }
-    private static BufferedImage grabNow(JFrame frame) {
+    private static BufferedImage grabNow(Window frame) {
         BufferedImage image=new BufferedImage(Math.max(1,frame.getWidth()),Math.max(1,frame.getHeight()),BufferedImage.TYPE_INT_RGB);
         Graphics2D graphics=image.createGraphics();frame.paintAll(graphics);graphics.dispose();return image;
     }
     private static BufferedImage grab(JFrame frame)throws Exception {
         AtomicReference<BufferedImage> image=new AtomicReference<>();
         SwingSmoke.edt(()->image.set(grabNow(frame)));
+        return image.get();
+    }
+    /** Same as {@link #grab}, for dialogs: a heavyweight window must be captured on the EDT. */
+    private static BufferedImage grabWindow(Window window)throws Exception {
+        AtomicReference<BufferedImage> image=new AtomicReference<>();
+        SwingSmoke.edt(()->image.set(grabNow(window)));
         return image.get();
     }
     /** Compares a coarse grid of pixels: enough to tell "frozen" from "moving" without noise. */

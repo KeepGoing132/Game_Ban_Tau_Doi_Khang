@@ -1,6 +1,6 @@
 # Kiến trúc Battleship Online
 
-Java SE/Swing, TCP JSON UTF-8 theo dòng, SQLite JDBC cho lưu trữ. Server là trọng tài duy nhất giữ bàn cờ bí mật và quyết định mọi thay đổi. Cập nhật 04/10/2026 theo PLAN_GPT_6_1_SOL.md.
+Java SE/Swing, TCP JSON UTF-8 theo dòng, SQLite JDBC cho lưu trữ. Server là trọng tài duy nhất giữ bàn cờ bí mật và quyết định mọi thay đổi. Tài liệu này mô tả kiến trúc đã triển khai; lộ trình hoàn thiện nằm trong [PLAN.md](PLAN.md).
 
 ## Cấu trúc
 
@@ -57,7 +57,7 @@ Match deadline dùng đồng hồ đơn điệu, turn_id tăng mỗi hành độ
 
 Lần đầu nhập JSON cũ trong một transaction, giữ ID/hash/điểm/lịch sử/hạn phạt. Marker schema_version chỉ được ghi sau nhập thành công; khởi động sau dùng SQLite. JSON nguồn được giữ nguyên, không ghi tiếp. Mật khẩu là PBKDF2-HMAC-SHA256 có salt. Xóa tài khoản yêu cầu xác thực lại, chỉ ở sảnh; transaction bỏ username/hash, ẩn danh tên trong lịch sử. Một tombstone theo ID duy trì tham chiếu lịch sử và không xuất hiện trong login/xếp hạng.
 
-Hạn phạt rời trận là endedAt+60000, trừ min(3, điểm). Pending chưa lưu vẫn chặn ghép; retry không kéo dài hạn phạt. Kết quả pending ở RAM không bảo đảm qua crash khi database không ghi được. File DB và mọi bản lưu cũ chứa thông tin nhạy cảm cần được quản lý như dữ liệu tài khoản.
+Hạn phạt rời trận là endedAt+60000, trừ min(3, điểm). Pending chưa lưu vẫn chặn ghép; retry không kéo dài hạn phạt. ResultJournal ghi từng kết quả vào file tạm, đồng bộ FileDescriptor rồi atomic move sang file chính; SQLite commit xong mới dọn journal. Khởi động đọc/kiểm tra phiên bản và SHA-256, nạp pending trước khi mở socket và thử commit theo match_id. Journal hỏng giữ nguyên và dừng khởi động; file tạm chưa công bố chỉ được báo, không tự áp dụng. Nếu chưa ghi journal được, kết quả chỉ nằm trong RAM và chưa bền vững. File DB và mọi bản lưu cũ chứa thông tin nhạy cảm cần được quản lý như dữ liệu tài khoản.
 
 ## Máy chơi
 
@@ -84,3 +84,29 @@ Client có `ChatController` riêng cho mỗi lần đăng nhập. Cache theo pee
 ## Phân công và kiểm chứng
 
 Dương: TCP/xác thực/presence; Bảo: room/queue/invitation; Hải: board/placement/Ready; Khoa: combat/timer/kết quả/xếp hạng. Protocol, storage và tích hợp phối hợp chung. Xem TASKS_AND_MEMBERS.md cho ánh xạ nguồn Word và test, README.md cho chạy/demo và giới hạn đã kiểm chứng.
+
+## Luồng sự kiện của bản hoàn thiện 26/10/2026
+
+| Trạng thái đầu | Ý định/yêu cầu | Server xử lý | Trạng thái sau và nhánh lỗi |
+| --- | --- | --- | --- |
+| LOGIN | LOGIN_REQ | Xác thực/tạo mới, giữ chủ phiên cũ | LOGIN_RESP thành công → LOBBY; lỗi giữ form |
+| LOBBY | CHANGE_PASSWORD_REQ | Registry lock → kiểm tra phase → storage xác thực/băm/commit | Giữ LOBBY và phiên; chỉ cập nhật hash RAM sau commit |
+| IDLE | Queue/mời/tạo/vào phòng/đấu máy | Registry bảo đảm một context | QUEUED/IN_ROOM hoặc PLACING; lỗi giữ trạng thái server |
+| PLACING | PLACE_SHIPS_REQ → PLAYER_READY_REQ | Match lock, thời hạn chuẩn bị, validate board tạm | Ready ack khóa sửa; hai Ready hợp lệ trước hạn → RUNNING |
+| PLACING | Hết hạn/rời phòng | CANCELLED, callback ra ngoài match lock rồi registry release | Cả hai LOBBY, không tính điểm/phạt |
+| RUNNING | FIRE_REQ | Kiểm tra match/turn/deadline, bắn và đổi/giữ lượt | FIRE_RESULT/TURN_CHANGE; lỗi không đổi deadline/count |
+| RUNNING | Hết tàu/đầu hàng/mất kết nối | FINISHED, journal → SQLite → cập nhật RAM | MATCH_END, điểm/trạng thái lưu; pending thì khóa rematch |
+| FINISHED | Retry lưu thành công | Commit đúng một lần, dọn journal, broadcast thống kê | RESULT_SAVED_NOTIFY cập nhật điểm/nút nếu còn cùng trận |
+| POST_GAME | Hai bên chấp nhận rematch | Registry thay phiên cũ bằng phiên và mã mới | PLACING với deadline chuẩn bị mới |
+| LOBBY | GET_MATCH_HISTORY_REQ | SQL có bộ lọc/cursor, mỗi trang ≤50 | MATCH_HISTORY_RESP; controller chỉ nhận request mới nhất |
+| Mọi màn hình | Heartbeat/mất mạng | Watchdog transport và cleanup theo phase | Cập nhật ms hoặc về LOGIN; không tự hồi sinh trận |
+
+ClientController định tuyến sau kiểm tra request/phiên sang handleAccountMessage, handleLobbyMessage, handlePlacementMessage, handleHistoryMessage và handleBattleMessage. Screen là trạng thái màn hình, không thay phase nghiệp vụ do server quyết định. ChatController giữ riêng luồng chat. Rời màn hình đặt tàu/chiến đấu dừng đồng hồ, hiệu ứng và listener liên quan.
+
+SocketClient gửi heartbeat có request_id, giữ mốc nanoTime và chỉ đo phản hồi khớp trong cùng generation. Callback về EDT được kiểm tra generation lần nữa; không dùng ping để đổi lượt hoặc xử thắng/thua.
+
+Lịch sử dùng SQLite với chỉ số theo player1/player2, thời điểm kết thúc và match_id. Cursor mang bộ lọc/tài khoản, mốc rowid của trang đầu và khóa cuối; bản ghi thêm sau mốc không chen vào các trang đang tải. Upsert giữ rowid kết quả cũ. Response chỉ gồm tóm tắt; fleets/shot log đi qua endpoint chi tiết có kiểm tra đấu thủ.
+
+Mẫu tàu dùng Preferences, tối đa 5 ô cho mỗi SHA-256(endpoint + accountId); lưu bố trí của chính mình, không lưu credentials. FleetLayout kiểm tra và sao chép đầy đủ trước khi thay bàn đang sửa; server tiếp tục validate yêu cầu đặt tàu.
+
+Journal giới hạn 64 MiB/1 MiB mỗi bản ghi, chống lặp bằng match_id đã commit. Retry/restart không kéo dài hạn phạt. Kiểm chứng là crash tiến trình sau khi journal được công bố; không tuyên bố chịu mọi tình huống mất điện/hỏng đĩa. Shutdown hủy trận đang chạy trước khi đóng socket và thử lưu pending lần cuối.

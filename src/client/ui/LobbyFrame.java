@@ -21,6 +21,7 @@ public class LobbyFrame extends JFrame {
     private final JLabel lblOnlineCount=Theme.muted("Đang cập nhật hạm đội...");
     private final JLabel lblFeedback=Theme.muted("Chọn ghép trận nhanh hoặc mời một người bạn.");
     private final JLabel lblPenalty=Theme.badge(" ",Theme.WARNING);
+    private final JLabel lblConnection = Theme.muted("Đang đo kết nối...");
     private final JLabel lblQuickMatchStatus=Theme.label("Sẵn sàng cho một cuộc đấu trí?",Theme.FONT_REGULAR,Theme.TEXT_MUTED);
     private final JLabel lblCreatedRoomCode=Theme.label("— — — — — —",Theme.FONT_GRID.deriveFont(Font.BOLD,29f),Theme.PRIMARY);
     private final JLabel lblRoomHint=Theme.muted("Tạo mã riêng và gửi cho bạn bè.");
@@ -57,13 +58,11 @@ public class LobbyFrame extends JFrame {
         home.addActionListener(e->showStatus("Bạn đang ở phòng chỉ huy. Chọn một chế độ để bắt đầu.",false));Theme.addStack(sidebar,home,8);
         JButton ranking=Theme.button("02   Bảng xếp hạng",false);ranking.setForeground(Theme.GOLD);ranking.setFont(Theme.FONT_SMALL);ranking.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));ranking.addActionListener(e->controller.requestLeaderboard());Theme.addStack(sidebar,ranking,8);
         JButton history=Theme.button("03   Lịch sử đấu",false);history.setForeground(Theme.MAGENTA);history.setFont(Theme.FONT_SMALL);history.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));history.addActionListener(e->controller.requestMatchHistory(0));Theme.addStack(sidebar,history,8);
-        JButton guide=Theme.button("04   Cách chơi",false);guide.setForeground(Theme.AZURE);guide.setFont(Theme.FONT_SMALL);guide.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));guide.addActionListener(e->showGuide());Theme.addStack(sidebar,guide,0);
+        JButton guide=Theme.button("04   Cách chơi",false);guide.setForeground(Theme.AZURE);guide.setFont(Theme.FONT_SMALL);guide.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));guide.addActionListener(e->showGuide());Theme.addStack(sidebar,guide,8);
+        JButton settings=Theme.button("05   Cài đặt",false);settings.setForeground(Theme.LIME);settings.setFont(Theme.FONT_SMALL);settings.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));settings.addActionListener(e->SettingsDialog.open(this));Theme.addStack(sidebar,settings,8);
         sidebar.add(Box.createVerticalGlue());
-        JButton sound=Theme.button(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt",false);sound.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));sound.addActionListener(e->{GameAudio.setEnabled(!GameAudio.isEnabled());sound.setText(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt");});Theme.addStack(sidebar,sound,8);
-        JButton sea=Theme.button(OceanScene.isAnimated()?"Biển động: Bật":"Biển động: Tắt",false);sea.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));sea.setFont(Theme.FONT_SMALL);
-        sea.addActionListener(e->{OceanScene.setAnimated(!OceanScene.isAnimated());sea.setText(OceanScene.isAnimated()?"Biển động: Bật":"Biển động: Tắt");});Theme.addStack(sidebar,sea,8);
         btnAccount.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));btnAccount.addActionListener(e->accountDialog());Theme.addStack(sidebar,btnAccount,8);
-        Theme.addStack(sidebar,Theme.badge("●  Đã kết nối",Theme.PRIMARY),16);
+        Theme.addStack(sidebar,lblConnection,16);
         JButton logout=Theme.button("Đăng xuất",false);logout.setMaximumSize(new Dimension(Integer.MAX_VALUE,42));logout.addActionListener(e->controller.logout());Theme.addStack(sidebar,logout,0);root.add(sidebar,BorderLayout.WEST);
 
         JPanel main=Theme.transparent(new BorderLayout(0,16));main.setBorder(new EmptyBorder(24,28,22,28));root.add(main,BorderLayout.CENTER);
@@ -191,13 +190,21 @@ public class LobbyFrame extends JFrame {
         for(int i=0;i<3;i++){final String level=levels[i];JButton b=Theme.button(names[i],true);Theme.styleButton(b,colors[i],Theme.BG_DARK);b.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));b.addActionListener(e->{dialog.dispose();beginAction();controller.startBot(level);});Theme.addStack(body,b,6);Theme.addStack(body,Theme.label(details[i],Theme.FONT_REGULAR,Theme.TEXT_MUTED),18);}
         dialog.setContentPane(body);dialog.setSize(490,445);dialog.setResizable(false);dialog.setLocationRelativeTo(this);dialog.setVisible(true);
     }
+    public void setConnectionStatus(String value) { lblConnection.setText("<html>" + Theme.html(value) + "</html>"); }
     private void accountDialog(){
+        Object[] actions = {"Đổi mật khẩu", "Xóa tài khoản", "Đóng"};
+        int choice = JOptionPane.showOptionDialog(this, "Quản lý tài khoản đang đăng nhập", "Tài khoản",
+                JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, actions, actions[0]);
+        if (choice == 0) controller.openPasswordDialog();
+        else if (choice == 1) deleteAccountDialog();
+    }
+    private void deleteAccountDialog(){
         JPanel body=Theme.stack();Theme.addStack(body,Theme.label("Xóa tài khoản của bạn?",Theme.FONT_HEADER,Theme.DANGER),12);
         Theme.addStack(body,Theme.label("<html>Tên đăng nhập và mật khẩu sẽ bị xóa khỏi database.<br>Điểm không thể khôi phục. Lịch sử trận được ẩn danh.</html>",Theme.FONT_REGULAR,Theme.TEXT_MAIN),16);
         JPasswordField password=new JPasswordField(22);Theme.styleField(password);password.getAccessibleContext().setAccessibleName("Mật khẩu xác nhận xóa tài khoản");Theme.addStack(body,Theme.label("Nhập mật khẩu để xác nhận",Theme.FONT_REGULAR,Theme.TEXT_MUTED),6);Theme.addStack(body,password,0);
         int choice=JOptionPane.showOptionDialog(this,body,"Xóa tài khoản",JOptionPane.DEFAULT_OPTION,JOptionPane.WARNING_MESSAGE,null,new Object[]{"Xóa tài khoản","Hủy"},"Hủy");
         if(choice==JOptionPane.OK_OPTION){char[] chars=password.getPassword();if(chars.length==0){showStatus("Cần nhập mật khẩu để xóa tài khoản.",true);return;}beginAction();controller.deleteAccount(new String(chars));java.util.Arrays.fill(chars,'\0');}
     }
-    private void showGuide(){JOptionPane.showMessageDialog(this,"1. Tìm đối thủ hoặc tạo phòng để chơi cùng bạn bè.\n2. Đặt 5 tàu (5, 4, 3, 3, 2 ô), rồi nhấn Sẵn sàng.\n3. Chọn tọa độ trên bản đồ đối thủ, rồi nhấn Khai hỏa.\n\nBắn trúng: giữ lượt. Bắn trượt: đổi lượt.\nHết 15 giây: mất lượt. Đánh chìm cả 5 tàu để thắng.\nThắng +3 điểm. Sau trận, có thể đề nghị chơi lại.","Hướng dẫn chỉ huy",JOptionPane.PLAIN_MESSAGE);}
+    private void showGuide(){JOptionPane.showMessageDialog(this,"1. Tìm đối thủ hoặc tạo phòng để chơi cùng bạn bè.\n2. Đặt 5 tàu (5, 4, 3, 3, 2 ô), rồi nhấn Sẵn sàng.\n3. Chọn tọa độ trên bản đồ đối thủ, rồi nhấn Khai hỏa.\n\nBắn trúng: giữ lượt. Bắn trượt: đổi lượt.\nHết 15 giây: mất lượt. Đánh chìm cả 5 tàu để thắng.\nThắng +3 điểm. Sau trận, có thể đề nghị chơi lại.\n\n4. Kết thúc trận: xem bảng WIN / LOSE rồi cả hai hải phận mở ra.\n5. Mở Lịch sử đấu ở cột bên trái, nhấn vào một dòng để xem lại\ntoàn bộ hải phận và đường đạn của trận đó.\n6. Cài đặt: chỉnh âm lượng, sóng biển và bản đồ thu nhỏ.","Hướng dẫn chỉ huy",JOptionPane.PLAIN_MESSAGE);}
     @Override public void dispose(){if(queueTimer!=null)queueTimer.stop();if(penaltyTimer!=null)penaltyTimer.stop();super.dispose();}
 }

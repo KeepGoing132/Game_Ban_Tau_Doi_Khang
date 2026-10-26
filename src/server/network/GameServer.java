@@ -49,6 +49,9 @@ public class GameServer {
         try{if(listener!=null)listener.close();}catch(IOException ignored){}
         // Server shutdown cancels sessions before socket cleanup to avoid awarding shutdown wins.
         matches.shutdown();lobby.shutdown();
+        storage.retryPending();
+        if (storage.getPendingCount() > 0)
+            System.err.println("[Shutdown] Some results still await storage. Preserve data/pending-results with the database backup.");
         for(ClientHandler handler:connections)handler.close();
         workers.shutdownNow();
         try{workers.awaitTermination(3,TimeUnit.SECONDS);}catch(InterruptedException e){Thread.currentThread().interrupt();}

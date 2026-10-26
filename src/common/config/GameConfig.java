@@ -7,6 +7,8 @@ public class GameConfig {
     public static final int BOARD_SIZE = 10;
     public static final int TURN_TIMEOUT_SECONDS = 15;
     public static final long TURN_TIMEOUT_MS = Long.getLong("battleship.turn_ms", 15000L);
+    public static final long PLACEMENT_TIMEOUT_MS = Long.getLong("battleship.placement_ms", 120000L);
+    public static final long SLOW_CONNECTION_MS = Long.getLong("battleship.slow_connection_ms", 250L);
     public static final long HEARTBEAT_INTERVAL_MS = Long.getLong("battleship.heartbeat_ms", 5000L);
     public static final long HEARTBEAT_TIMEOUT_MS = Long.getLong("battleship.idle_ms", 20000L);
     public static final long INVITE_TIMEOUT_MS = Long.getLong("battleship.invite_ms", 30000L);
@@ -15,7 +17,7 @@ public class GameConfig {
     public static final int MAX_CONNECTIONS = 128;
     public static final int MAX_PENDING_MESSAGES = 256;
     static {
-        if (TURN_TIMEOUT_MS<=0 || HEARTBEAT_INTERVAL_MS<=0 || HEARTBEAT_TIMEOUT_MS<=0 || INVITE_TIMEOUT_MS<=0 || REMATCH_TIMEOUT_MS<=0)
+        if (TURN_TIMEOUT_MS<=0 || PLACEMENT_TIMEOUT_MS<=0 || SLOW_CONNECTION_MS<=0 || HEARTBEAT_INTERVAL_MS<=0 || HEARTBEAT_TIMEOUT_MS<=0 || INVITE_TIMEOUT_MS<=0 || REMATCH_TIMEOUT_MS<=0)
             throw new IllegalArgumentException("Battleship timing properties must be positive");
     }
     

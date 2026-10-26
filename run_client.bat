@@ -8,7 +8,7 @@ if not exist "bin\client\ClientMain.class" (
         exit /b 1
     )
 )
-java -Dfile.encoding=UTF-8 -cp "%~dp0bin" client.ClientMain
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run_java.ps1" client
 set "BATTLESHIP_EXIT=%ERRORLEVEL%"
 popd
 exit /b %BATTLESHIP_EXIT%

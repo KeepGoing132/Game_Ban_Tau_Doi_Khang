@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'scripts/java_env.ps1')
+Use-BattleshipJava -Compiler
 Push-Location $PSScriptRoot
 try {
     foreach ($tool in @('java','javac','jar')) {

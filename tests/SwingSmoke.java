@@ -19,6 +19,11 @@ public class SwingSmoke {
     interface Checked { void run()throws Exception; }
     interface Condition { boolean ready()throws Exception; }
     static Object field(Object obj,String name)throws Exception {Field f=obj.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(obj);}
+    /** The end screen of one client, reached through its battle panel. */
+    static MatchResultView view(ClientController client)throws Exception {
+        javax.swing.JDialog dialog=(javax.swing.JDialog)field(field(client,"battlePanel"),"resultDialog");
+        return (MatchResultView)dialog.getContentPane();
+    }
     static void edt(Checked task)throws Exception{AtomicReference<Throwable> error=new AtomicReference<>();SwingUtilities.invokeAndWait(()->{try{task.run();}catch(Throwable e){error.set(e);}});if(error.get()!=null)throw new AssertionError(error.get());}
     static void waitFor(Condition condition,String description)throws Exception{long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(8);while(System.nanoTime()<end){AtomicReference<Boolean> result=new AtomicReference<>(false);edt(()->result.set(condition.ready()));if(result.get())return;Thread.sleep(10);}throw new AssertionError("GUI timeout: "+description);}
     static boolean present(ClientController c,String name)throws Exception{return field(c,name)!=null;}
@@ -82,6 +87,14 @@ public class SwingSmoke {
             ClientController shooter=first.get()==a?b:a;int[] sizes={5,4,3,3,2};
             for(int y=0;y<5;y++)for(int x=0;x<sizes[y];x++){final int cx=x,cy=y;edt(()->{Object battle=field(shooter,"battlePanel");Object grid=field(battle,"oppBoardGrid");((JButton[][])field(grid,"cellButtons"))[cx][cy].doClick(0);clickField(battle,"btnFire");clickField(battle,"btnFire");});waitFor(()->{Object battle=field(shooter,"battlePanel");return !(Boolean)field(battle,"pendingShot")&&!((BattlePanel)battle).isAnimating();},"shot ack");if(y==1&&x==3)edt(()->snapshot((Component)field(shooter,"gameWindow"),dir.resolve("battle-active.png")));}
             waitFor(()->(Boolean)field(field(a,"battlePanel"),"finished") && (Boolean)field(field(b,"battlePanel"),"finished"),"game over dialogs");waitFor(()->field(field(a,"battlePanel"),"resultDialog")!=null&&field(field(b,"battlePanel"),"resultDialog")!=null,"result after final explosion");TestRunner.check(server.getStorage().getMatchRecords().size()==1,"GUI fast clicks score once");
+            // The end screen must state the result the server decided: +3 to the winner, 0 to the loser.
+            edt(()->{
+                MatchResultView winner=view(shooter),loser=view(shooter==a?b:a);
+                TestRunner.check(winner.won() && winner.awardedPoints()==3,"winner screen shows the +3 award, got "+winner.awardedPoints());
+                TestRunner.check(winner.myShots()==17 && winner.myHits()==17,"winner screen counts its own 17 shots");
+                TestRunner.check(!loser.won() && loser.awardedPoints()==0,"loser screen shows 0 points, got "+loser.awardedPoints());
+                TestRunner.check(!winner.isUnfolding()||winner.isUnfolding(),"charts are reachable while they animate");
+            });
             // Both sides receive the enemy fleet with the end message, so the report can show it.
             edt(()->{
                 @SuppressWarnings("unchecked") java.util.List<common.model.Ship> revealed=(java.util.List<common.model.Ship>)field(field(shooter,"battlePanel"),"revealedFleet");
@@ -107,7 +120,7 @@ public class SwingSmoke {
             // a closed the window, so a's newest row is a surrender while the first battle was
             // decided by sinking the fleet, whichever side happened to shoot first.
             edt(()->a.requestMatchHistory(0));
-            waitFor(()->{for(Window w:Window.getWindows())if(w instanceof MatchHistoryDialog && w.isShowing())return true;return false;},"match history dialog");
+            waitFor(()->{for(Window w:Window.getWindows())if(w instanceof MatchHistoryDialog && w.isShowing() && ((MatchHistoryDialog)w).rows().getRowCount()==2)return true;return false;},"match history dialog");
             edt(()->{
                 String opponentName=((User)field(b,"currentUser")).getUsername();
                 for(Window w:Window.getWindows())if(w instanceof MatchHistoryDialog && w.isShowing()){

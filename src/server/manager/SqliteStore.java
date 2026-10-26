@@ -8,6 +8,7 @@ import java.util.*;
 
 /** Short-lived JDBC connections; one transaction commits accounts and match results. */
 final class SqliteStore {
+    private static final String HISTORY_TIME = "CASE WHEN COALESCE(json_extract(payload,'$.endedAt'),0)>0 THEN json_extract(payload,'$.endedAt') ELSE COALESCE(json_extract(payload,'$.timestamp'),0) END";
     private final String url;
     SqliteStore(Path file) throws Exception {
         Class.forName("org.sqlite.JDBC");url="jdbc:sqlite:"+file.toAbsolutePath();
@@ -15,6 +16,8 @@ final class SqliteStore {
             s.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS accounts (user_id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, total_points INTEGER NOT NULL CHECK(total_points>=0), total_wins INTEGER NOT NULL, total_games INTEGER NOT NULL, blocked_until INTEGER NOT NULL DEFAULT 0, deleted INTEGER NOT NULL DEFAULT 0)");
             s.execute("CREATE TABLE IF NOT EXISTS matches (match_id TEXT PRIMARY KEY, player1_id INTEGER NOT NULL, player2_id INTEGER NOT NULL, payload TEXT NOT NULL)");
+            s.execute("CREATE INDEX IF NOT EXISTS match_history_p1 ON matches(player1_id,("+HISTORY_TIME+") DESC,match_id DESC)");
+            s.execute("CREATE INDEX IF NOT EXISTS match_history_p2 ON matches(player2_id,("+HISTORY_TIME+") DESC,match_id DESC)");
             s.execute("CREATE TABLE IF NOT EXISTS chat_messages (message_id INTEGER PRIMARY KEY AUTOINCREMENT, sender_id INTEGER NOT NULL, recipient_id INTEGER NOT NULL, body TEXT NOT NULL CHECK(length(body) BETWEEN 1 AND 500), sent_at_ms INTEGER NOT NULL, client_message_id TEXT NOT NULL, pair_low INTEGER NOT NULL, pair_high INTEGER NOT NULL, UNIQUE(sender_id,client_message_id), CHECK(sender_id<>recipient_id))");
             s.execute("CREATE INDEX IF NOT EXISTS chat_pair_history ON chat_messages(pair_low,pair_high,message_id)");
             s.execute("CREATE INDEX IF NOT EXISTS chat_sender ON chat_messages(sender_id,message_id)");
@@ -69,6 +72,36 @@ final class SqliteStore {
         try(Statement s=c.createStatement()){s.execute("PRAGMA busy_timeout=5000");s.execute("PRAGMA synchronous=FULL");s.execute("PRAGMA secure_delete=ON");}
         return c;
     }
+    /** Keyset pagination excludes records inserted after the first page's rowid watermark. */
+    Map<String,Object> history(int target, HistoryQuery query) throws SQLException {
+        try (Connection c=open()) {
+            long snapshot=query.snapshot;
+            if (snapshot==0) try (Statement s=c.createStatement(); ResultSet r=s.executeQuery("SELECT COALESCE(MAX(rowid),0) FROM matches")) { if (r.next()) snapshot=r.getLong(1); }
+            String sql="SELECT match_id,("+HISTORY_TIME+") AS ended FROM matches WHERE (player1_id=? OR player2_id=?) AND rowid<=? AND ("+HISTORY_TIME+")>=? AND ("+HISTORY_TIME+")<=?";
+            if (!"ALL".equals(query.result)) sql+=" AND json_extract(payload,'$.winnerId')"+("WIN".equals(query.result)?"=":"<>")+"?";
+            if (!query.opponent.isEmpty()) sql+=" AND instr(lower(CASE WHEN player1_id=? THEN json_extract(payload,'$.player2Name') ELSE json_extract(payload,'$.player1Name') END),?)>0";
+            if (!query.beforeId.isEmpty()) sql+=" AND (("+HISTORY_TIME+")<? OR (("+HISTORY_TIME+")=? AND match_id<?))";
+            sql+=" ORDER BY ended DESC,match_id DESC LIMIT ?";
+            List<String> ids=new ArrayList<>(); long lastTime=0; String lastId="";
+            try (PreparedStatement p=c.prepareStatement(sql)) {
+                int i=1; p.setInt(i++,target); p.setInt(i++,target); p.setLong(i++,snapshot); p.setLong(i++,query.from); p.setLong(i++,query.to);
+                if (!"ALL".equals(query.result)) p.setInt(i++,target);
+                if (!query.opponent.isEmpty()) { p.setInt(i++,target); p.setString(i++,query.opponent); }
+                if (!query.beforeId.isEmpty()) { p.setLong(i++,query.beforeTime); p.setLong(i++,query.beforeTime); p.setString(i++,query.beforeId); }
+                p.setInt(i,query.limit+1);
+                try (ResultSet r=p.executeQuery()) {
+                    while (r.next()) {
+                        ids.add(r.getString("match_id"));
+                        if (ids.size()<=query.limit) { lastTime=r.getLong("ended"); lastId=r.getString("match_id"); }
+                    }
+                }
+            }
+            boolean more=ids.size()>query.limit;
+            if (more) ids.remove(ids.size()-1);
+            Map<String,Object> page=new LinkedHashMap<>(); page.put("ids",ids); page.put("has_more",more);
+            page.put("next_cursor",more?query.cursor(snapshot,lastTime,lastId):""); return page;
+        }
+    }
     boolean initialized() throws SQLException {
         try(Connection c=open();Statement s=c.createStatement();ResultSet r=s.executeQuery("SELECT value FROM metadata WHERE key='schema_version'")) {
             if(!r.next())return false;if(!"1".equals(r.getString(1)))throw new SQLException("Unsupported database version");return true;
@@ -89,11 +122,10 @@ final class SqliteStore {
         try(Connection c=open()) {
             c.setAutoCommit(false);
             try {
-                try(Statement s=c.createStatement()){s.executeUpdate("DELETE FROM accounts");s.executeUpdate("DELETE FROM matches");}
-                try(PreparedStatement p=c.prepareStatement("INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?)")) {
+                try(PreparedStatement p=c.prepareStatement("INSERT INTO accounts VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(user_id) DO UPDATE SET username=excluded.username,password_hash=excluded.password_hash,total_points=excluded.total_points,total_wins=excluded.total_wins,total_games=excluded.total_games,blocked_until=excluded.blocked_until,deleted=excluded.deleted")) {
                     for(Map<String,Object> u:users){p.setInt(1,((Number)u.get("userId")).intValue());p.setString(2,(String)u.get("username"));p.setString(3,(String)u.get("passwordHash"));p.setInt(4,((Number)u.get("totalPoints")).intValue());p.setInt(5,((Number)u.get("totalWins")).intValue());p.setInt(6,((Number)u.get("totalGames")).intValue());p.setLong(7,((Number)u.get("matchmakingBlockedUntil")).longValue());p.setBoolean(8,Boolean.TRUE.equals(u.get("deleted")));p.addBatch();}p.executeBatch();
                 }
-                try(PreparedStatement p=c.prepareStatement("INSERT INTO matches VALUES (?,?,?,?)")) {
+                try(PreparedStatement p=c.prepareStatement("INSERT INTO matches VALUES (?,?,?,?) ON CONFLICT(match_id) DO UPDATE SET player1_id=excluded.player1_id,player2_id=excluded.player2_id,payload=excluded.payload")) {
                     for(Object o:records){@SuppressWarnings("unchecked") Map<String,Object> m=(Map<String,Object>)o;p.setString(1,(String)m.get("matchId"));p.setInt(2,((Number)m.get("player1Id")).intValue());p.setInt(3,((Number)m.get("player2Id")).intValue());p.setString(4,JsonUtil.toJson(m));p.addBatch();}p.executeBatch();
                 }
                 try(Statement s=c.createStatement()){s.executeUpdate("INSERT OR REPLACE INTO metadata VALUES ('schema_version','1')");}

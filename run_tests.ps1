@@ -1,5 +1,7 @@
-param([switch]$RealTimer, [switch]$Gui, [switch]$SelfTestFailure, [switch]$Visual, [switch]$Ocean, [switch]$Chat, [switch]$ChatGui)
+param([switch]$RealTimer, [switch]$Gui, [switch]$SelfTestFailure, [switch]$Visual, [switch]$Ocean, [switch]$Chat, [switch]$ChatGui, [switch]$Upgrade, [switch]$UpgradeGui, [switch]$Package)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'scripts/java_env.ps1')
+Use-BattleshipJava -Compiler
 $testBuild = Join-Path $env:TEMP ('battleship-tests-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $testBuild | Out-Null
 Push-Location $PSScriptRoot
@@ -13,9 +15,12 @@ try {
     # Short rematch window so GUI runs stay fast, but long enough that the result dialog, its
     # after-action report and the screenshot taken from it all fit before the offer expires.
     $javaFlags = @('-Dfile.encoding=UTF-8','-Dbattleship.idle_ms=2500','-Dbattleship.heartbeat_ms=500','-Dbattleship.invite_ms=700','-Dbattleship.rematch_ms=4000')
-    if (-not $RealTimer) { $javaFlags += '-Dbattleship.turn_ms=700' }
+    # A compressed turn window must stay longer than one shell-impact animation (0.82 s, sunken
+    # 1.18 s) plus a click round trip, otherwise the server times out a shooter who is still
+    # watching the explosion and the GUI scripts stall.
+    if (-not $RealTimer) { $javaFlags += '-Dbattleship.turn_ms=2500' }
     $testArgs = @('-cp', ('"' + $testBuild + ';' + (Join-Path $PSScriptRoot 'lib/*') + '"'), 'tests.TestRunner')
-    if ($ChatGui) { $testArgs += 'chatgui' } elseif ($Chat) { $testArgs += 'chat' } elseif ($Visual) { $testArgs += 'visual' } elseif ($Ocean) { $testArgs += 'ocean' } elseif ($Gui) { $testArgs += 'gui' }
+    if ($Package) { $testArgs += 'package' } elseif ($UpgradeGui) { $testArgs += 'upgradegui' } elseif ($Upgrade) { $testArgs += 'upgrade' } elseif ($ChatGui) { $testArgs += 'chatgui' } elseif ($Chat) { $testArgs += 'chat' } elseif ($Visual) { $testArgs += 'visual' } elseif ($Ocean) { $testArgs += 'ocean' } elseif ($Gui) { $testArgs += 'gui' }
     if ($SelfTestFailure) { $testArgs += 'fail' }
     $process = Start-Process java -ArgumentList ($javaFlags + $testArgs) -PassThru -NoNewWindow
     $processHandle = $process.Handle

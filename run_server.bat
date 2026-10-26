@@ -10,7 +10,7 @@ if not exist "bin\server\ServerMain.class" (
 )
 set "BATTLESHIP_PORT=8888"
 if not "%~1"=="" set "BATTLESHIP_PORT=%~1"
-java -Dfile.encoding=UTF-8 -cp "%~dp0bin;%~dp0lib/*" server.ServerMain %BATTLESHIP_PORT%
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\run_java.ps1" server %BATTLESHIP_PORT%
 set "BATTLESHIP_EXIT=%ERRORLEVEL%"
 popd
 exit /b %BATTLESHIP_EXIT%

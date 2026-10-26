@@ -11,9 +11,11 @@ import javax.swing.SwingUtilities;
 public class SocketClient {
     private final ServerListener listener;
     private volatile Session current;
-    private long generation;
+    private volatile long generation;
     private static final class Session {
         final long generation;final LineConnection wire;final ScheduledExecutorService heartbeat;
+        volatile String heartbeatId;
+        volatile long heartbeatSentNanos;
         Session(long generation,LineConnection wire){this.generation=generation;this.wire=wire;heartbeat=Executors.newSingleThreadScheduledExecutor(r->{Thread t=new Thread(r,"client-heartbeat");t.setDaemon(true);return t;});}
         void close(){heartbeat.shutdownNow();wire.close();}
     }
@@ -28,13 +30,25 @@ public class SocketClient {
             Session session=new Session(token,new LineConnection(socket));
             synchronized(this){if(generation!=token){session.close();return false;}current=session;}
             dispatch(session,()->listener.onConnected());
-            session.heartbeat.scheduleAtFixedRate(()->session.wire.send(new Message(MessageType.HEARTBEAT_REQ).requestId(UUID.randomUUID().toString())),GameConfig.HEARTBEAT_INTERVAL_MS,GameConfig.HEARTBEAT_INTERVAL_MS,TimeUnit.MILLISECONDS);
+            session.heartbeat.scheduleAtFixedRate(() -> {
+                String id = UUID.randomUUID().toString();
+                session.heartbeatSentNanos = System.nanoTime();
+                session.heartbeatId = id;
+                session.wire.send(new Message(MessageType.HEARTBEAT_REQ).requestId(id));
+            }, 0, GameConfig.HEARTBEAT_INTERVAL_MS, TimeUnit.MILLISECONDS);
             Thread reader=new Thread(()->listen(session),"client-reader-"+token);reader.setDaemon(true);reader.start();return true;
         }catch(IOException e){try{socket.close();}catch(IOException ignored){}return false;}
     }
     private void dispatch(Session s,Runnable action){SwingUtilities.invokeLater(()->{if(current==s && generation==s.generation)action.run();});}
     private void listen(Session session){
-        try {String line;while((line=session.wire.readLine())!=null){Message m=Message.fromJson(line);if(m==null)continue;session.wire.touch();if(m.getType()!=MessageType.HEARTBEAT_RESP)dispatch(session,()->listener.onMessageReceived(m));}}
+        try {String line;while((line=session.wire.readLine())!=null){Message m=Message.fromJson(line);if(m==null)continue;session.wire.touch();
+            if (m.getType() == MessageType.HEARTBEAT_RESP) {
+                if (m.getRequestId() != null && m.getRequestId().equals(session.heartbeatId)) {
+                    long ms = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - session.heartbeatSentNanos);
+                    session.heartbeatId = null;
+                    dispatch(session, () -> listener.onLatencyMeasured(ms));
+                }
+            } else dispatch(session,()->listener.onMessageReceived(m));}}
         catch(IOException | IllegalArgumentException e){}finally{lost(session,"Mất kết nối với máy chủ");}
     }
     private void lost(Session session,String reason){

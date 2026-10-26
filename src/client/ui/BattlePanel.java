@@ -32,6 +32,10 @@ public class BattlePanel extends OceanPanel {
     private final String myName,oppName;
     private JDialog resultDialog;
     private JButton rematchButton;
+    private final JLabel lblConnection = Theme.muted("Đang đo kết nối...");
+    private boolean resultStorageSaved = true;
+    private boolean rematchAllowed = true;
+    private Integer savedAward;
     private JLabel resultHint;
     private boolean pendingShot,finished,isMyTurn;
     private long localDeadlineNanos,turnDurationNanos;
@@ -54,11 +58,13 @@ public class BattlePanel extends OceanPanel {
     private Runnable afterEffect,impactAction;
     /** Enemy fleet released by the server once the match is over, for the battle report. */
     private List<Ship> revealedFleet;
+    /** Own fleet as deployed, kept for the after-action charts. */
+    private final List<Ship> myFleet;
 
 
     public BattlePanel(String myName,String oppName,List<Ship> myShips,BattleActionListener actionListener) {
         super(new BorderLayout(20,14),"VÀO TRẬN","HẢI CHIẾN BẮT ĐẦU  •  "+myName+"  vs  "+oppName);
-        this.actionListener=actionListener;this.myName=myName;this.oppName=oppName;
+        this.actionListener=actionListener;this.myName=myName;this.oppName=oppName;this.myFleet=myShips;
         setBorder(new EmptyBorder(18,24,18,24));
         JPanel header=Theme.transparent(new BorderLayout(18,0));
         SeaDecor compass=new SeaDecor(SeaDecor.Kind.COMPASS);compass.setPreferredSize(new Dimension(56,56));header.add(compass,BorderLayout.WEST);
@@ -71,8 +77,9 @@ public class BattlePanel extends OceanPanel {
         JPanel controls=Theme.transparent(new FlowLayout(FlowLayout.RIGHT,12,4));
         miniToggle.setSelected(preferences.getBoolean("minimap",true));miniToggle.setOpaque(false);miniToggle.setForeground(Theme.TEXT_MAIN);miniToggle.setFont(Theme.FONT_REGULAR);miniToggle.addActionListener(e->{preferences.putBoolean("minimap",miniToggle.isSelected());miniBoardHost.setVisible(miniToggle.isSelected());revalidate();GameAudio.play(GameAudio.Sound.SELECT);});controls.add(miniToggle);
         controls.add(animationToggle());
-        JButton sound=Theme.button(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt",false);sound.addActionListener(e->{GameAudio.setEnabled(!GameAudio.isEnabled());sound.setText(GameAudio.isEnabled()?"Âm thanh: Bật":"Âm thanh: Tắt");});controls.add(sound);controls.add(btnSurrender);
-        Theme.addStack(options,controls,0);Theme.addStack(options,seaState(),0);header.add(options,BorderLayout.EAST);add(header,BorderLayout.NORTH);
+        JButton settings=Theme.button("Cài đặt",false);settings.addActionListener(e->SettingsDialog.open(this));controls.add(settings);
+        controls.add(btnSurrender);
+        Theme.addStack(options,controls,0);Theme.addStack(options,lblConnection,3);Theme.addStack(options,seaState(),0);header.add(options,BorderLayout.EAST);add(header,BorderLayout.NORTH);
         myBoardGrid=new BoardGridPanel("Hạm đội của bạn",false);oppBoardGrid=new BoardGridPanel("Hạm đội đối thủ",true);
         myBoardGrid.setFleet(myShips);
         add(mainBoardHost,BorderLayout.CENTER);
@@ -209,53 +216,62 @@ public class BattlePanel extends OceanPanel {
     public void showGameOver(boolean iWon,int awardedPoints,String reason){showGameOver(iWon,awardedPoints,reason,null,0);}
     public void showGameOver(boolean iWon,int awardedPoints,String reason,List<Ship> opponentFleet){showGameOver(iWon,awardedPoints,reason,opponentFleet,0);}
     /**
-     * Ends the match. When the server released the enemy fleet with the end message, the report
-     * publishes it on the board and adds an after-action chart to the result dialog.
+     * Ends the match with the full-screen result: the animated WIN / LOSE headline first, then both
+     * charts are thrown open with the released enemy fleet next to your own. The result stays
+     * modeless so the rematch offer, the exit button and the chat keep working while it plays.
      */
     public void showGameOver(boolean iWon,int awardedPoints,String reason,List<Ship> opponentFleet,int opponentShots){
-        if(animating){finished=true;visualTimer.stop();btnFire.setEnabled(false);afterEffect=()->showGameOver(iWon,awardedPoints,reason,opponentFleet,opponentShots);return;}
+        showGameOver(iWon,awardedPoints,reason,opponentFleet,opponentShots,0);
+    }
+    public void showGameOver(boolean iWon,int awardedPoints,String reason,List<Ship> opponentFleet,int opponentShots,long durationSeconds){
+        rematchAllowed = !"SURRENDER".equals(reason) && !"DISCONNECTED".equals(reason);
+        if(animating){finished=true;visualTimer.stop();btnFire.setEnabled(false);afterEffect=()->showGameOver(iWon,awardedPoints,reason,opponentFleet,opponentShots,durationSeconds);return;}
         GameAudio.battle(false);GameAudio.play(iWon?GameAudio.Sound.WIN:GameAudio.Sound.LOSE);
         finished=true;isMyTurn=false;pendingShot=false;visualTimer.stop();btnFire.setEnabled(false);btnSurrender.setEnabled(false);oppBoardGrid.setInteractionEnabled(false);lblTurnStatus.setText("Trận đấu kết thúc");lblTimer.setText("—");turnProgress.setValue(0);
         if(opponentFleet!=null)oppBoardGrid.revealFleet(opponentFleet);
         revealedFleet=opponentFleet;
-        resultDialog=new JDialog(SwingUtilities.getWindowAncestor(this),"Battleship • Kết quả trận đấu",Dialog.ModalityType.MODELESS);resultDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
-        OceanPanel result=new OceanPanel(new BorderLayout(0,20),iWon?"CHIẾN THẮNG":"TRẬN ĐẤU KẾT THÚC",iWon?"HẠM ĐỘI ĐỐI THỦ ĐÃ BỊ ĐÁNH CHÌM":"HẸN GẶP LẠI Ở LẦN RA KHƠI SAU");
-        result.finishIntro();result.setBorder(new EmptyBorder(26,28,24,28));
-        Color accent=iWon?Theme.PRIMARY:Theme.CORAL;
-        JPanel summary=Theme.seaCard(184,20);summary.setLayout(new BoxLayout(summary,BoxLayout.Y_AXIS));
-        SeaDecor resultSea=new SeaDecor(SeaDecor.Kind.HORIZON);resultSea.setPreferredSize(new Dimension(0,42));
-        Theme.addStack(summary,resultSea,12);
-        Theme.addStack(summary,Theme.badge(iWon?"NHIỆM VỤ HOÀN THÀNH":"NHIỆM VỤ KẾT THÚC",accent),14);
-        Theme.addStack(summary,Theme.label(iWon?"Chiến thắng, chỉ huy!":"Hẹn lần ra khơi tiếp theo.",Theme.FONT_TITLE,Theme.SEA_FOAM),8);
-        String reasonText="ALL_SHIPS_DESTROYED".equals(reason)?(iWon?"Bạn đã đánh chìm toàn bộ hạm đội đối thủ.":"Hạm đội của bạn đã bị đánh chìm."):"DISCONNECTED".equals(reason)?"Trận đấu kết thúc do mất kết nối.":"Trận đấu kết thúc do một người chơi rời trận.";
-        Theme.addStack(summary,Theme.label("<html>"+Theme.html(reasonText)+"</html>",Theme.FONT_REGULAR,new Color(206,228,242)),16);
-        JPanel stats=Theme.transparent(new GridLayout(1,3,14,0));
-        stats.add(resultStat("THAY ĐỔI ĐIỂM",String.format("%+d",awardedPoints),awardedPoints>=0?Theme.MINT:Theme.CORAL));
-        stats.add(resultStat("PHÁT BẮN",String.valueOf(shots),Theme.AZURE));
-        stats.add(resultStat("CHÍNH XÁC",(shots==0?0:Math.round(100.0*hits/shots))+"%",Theme.AMBER));
-        stats.setMaximumSize(new Dimension(Integer.MAX_VALUE,96));Theme.addStack(summary,stats,14);
-        resultHint=Theme.label("Chơi thêm một ván, hay trở về phòng chỉ huy?",Theme.FONT_SMALL,new Color(198,222,238));Theme.addStack(summary,resultHint,0);
-        JPanel body=Theme.transparent(new BorderLayout(18,0));
-        body.add(summary,BorderLayout.CENTER);
-        if(revealedFleet!=null){
-            JPanel report=Theme.seaCard(168,14);report.setLayout(new BorderLayout(0,8));
-            JPanel reportHead=Theme.transparent(new BorderLayout());
-            reportHead.add(Theme.label("HẠM ĐỘI ĐỐI THỦ  •  CÔNG BỐ SAU TRẬN",Theme.FONT_SMALL.deriveFont(Font.BOLD),Theme.MINT),BorderLayout.WEST);
-            reportHead.add(Theme.label("X trúng  •  ● trượt",Theme.FONT_SMALL,Theme.TEXT_MUTED),BorderLayout.EAST);
-            report.add(reportHead,BorderLayout.NORTH);
-            report.add(new FleetReport(revealedFleet,oppBoardGrid),BorderLayout.CENTER);
-            report.add(Theme.label(opponentShots>0?"Đối thủ đã bắn "+opponentShots+" phát.":"Hạm đội đối thủ công bố sau trận.",Theme.FONT_SMALL,Theme.SEA_HORIZON),BorderLayout.SOUTH);
-            report.setPreferredSize(new Dimension(340,0));
-            body.add(report,BorderLayout.EAST);
-        }
-        result.add(body,BorderLayout.CENTER);
-        JPanel buttons=Theme.transparent(new GridLayout(1,2,12,0));rematchButton=Theme.button("Chơi lại (Rematch)",true);JButton exit=Theme.button("Về phòng chỉ huy",false);
-        rematchButton.addActionListener(e->{rematchButton.setEnabled(false);rematchButton.setText("Đã gửi đề nghị");resultHint.setText("Đang chờ đối thủ đồng ý chơi lại...");actionListener.onRematch();});exit.addActionListener(e->{resultDialog.dispose();actionListener.onExitToLobby();});buttons.add(rematchButton);buttons.add(exit);result.add(buttons,BorderLayout.SOUTH);
+        // the result screen covers the battle, so the combat screen's sea clock can rest
+        disposeOcean();
+        Window owner=SwingUtilities.getWindowAncestor(this);
+        resultDialog=new JDialog(owner,"Battleship • Kết quả trận đấu",Dialog.ModalityType.MODELESS);
+        resultDialog.setUndecorated(true);
+        resultDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        MatchResultView result=new MatchResultView(iWon,myName,oppName,reason,awardedPoints,shots,hits,opponentShots,
+                durationSeconds,myFleet,myBoardGrid,revealedFleet,oppBoardGrid);
+        rematchButton=result.rematchButton();resultHint=result.hintLabel();
+        if (savedAward!=null) result.setAwardedPoints(savedAward);
+        applyResultStorage();
+        rematchButton.addActionListener(e->{rematchButton.setEnabled(false);rematchButton.setText("Đã gửi đề nghị");resultHint.setText("Đang chờ đối thủ đồng ý chơi lại...");actionListener.onRematch();});
+        result.exitButton().addActionListener(e->{resultDialog.dispose();actionListener.onExitToLobby();});
         resultDialog.addWindowListener(new java.awt.event.WindowAdapter(){public void windowClosing(java.awt.event.WindowEvent e){resultDialog.dispose();actionListener.onExitToLobby();}});
-        resultDialog.setContentPane(result);resultDialog.setSize(revealedFleet!=null?760:580,revealedFleet!=null?620:510);resultDialog.setResizable(false);resultDialog.setLocationRelativeTo(this);resultDialog.setVisible(true);
+        resultDialog.setContentPane(result);
+        if(owner!=null && owner.getWidth()>420 && owner.getHeight()>320)resultDialog.setBounds(owner.getBounds());
+        else{resultDialog.setSize(1180,800);resultDialog.setLocationRelativeTo(this);}
+        resultDialog.setVisible(true);
+        resultDialog.toFront();
     }
-    private JPanel resultStat(String title,String value,Color color){JPanel p=Theme.stack();Theme.addStack(p,Theme.muted(title),8);Theme.addStack(p,Theme.label(value,Theme.FONT_TITLE,color),0);return p;}
-    public void rematchRejected(){if(rematchButton!=null){rematchButton.setEnabled(true);rematchButton.setText("Chơi lại (Rematch)");resultHint.setText("Chưa thể chơi lại. Bạn có thể thử lại hoặc về sảnh.");}}
+    public void setConnectionStatus(String value) { lblConnection.setText(value); }
+    public void setResultStorage(boolean saved) { resultStorageSaved = saved; applyResultStorage(); }
+    public void setSavedAward(int points) {
+        savedAward=points;
+        if (resultDialog!=null && resultDialog.getContentPane() instanceof MatchResultView)
+            ((MatchResultView)resultDialog.getContentPane()).setAwardedPoints(points);
+    }
+    private void applyResultStorage() {
+        if (rematchButton == null) return;
+        rematchButton.setEnabled(resultStorageSaved && rematchAllowed);
+        if (!resultStorageSaved) resultHint.setText("Kết quả đang chờ lưu; điểm chưa được áp dụng. Bạn có thể về sảnh.");
+        else if (!rematchAllowed) resultHint.setText("Trận đã kết thúc do rời trận hoặc mất kết nối. Hãy về sảnh.");
+        else resultHint.setText("Kết quả đã được ghi nhận. Có thể đề nghị chơi lại hoặc về sảnh.");
+    }
+    public void rematchRejected(){if(rematchButton!=null){applyResultStorage();rematchButton.setText("Chơi lại (Rematch)");}}
+    /** Minimap on/off from the settings dialog; also keeps the header toggle in sync. */
+    public void setMinimapVisible(boolean value){
+        preferences.putBoolean("minimap",value);
+        if(miniToggle.isSelected()!=value)miniToggle.setSelected(value);
+        miniBoardHost.setVisible(value);
+        revalidate();repaint();
+    }
     public void disposePanel(){effectTimer.stop();animating=false;afterEffect=null;impactAction=null;GameAudio.battle(false);if(resultDialog!=null)resultDialog.dispose();visualTimer.stop();disposeOcean();finished=true;pendingShot=false;oppBoardGrid.setCellClickListener(null);}
     @Override public void removeNotify(){if(visualTimer!=null)visualTimer.stop();if(effectTimer!=null)effectTimer.stop();GameAudio.battle(false);super.removeNotify();}
 }

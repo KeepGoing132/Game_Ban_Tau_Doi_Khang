@@ -1,6 +1,8 @@
 # Battleship Online
 
-Giao diện **Naval Command**: đăng nhập, phòng chỉ huy, bố trí hạm đội có xem trước, chiến đấu với nhật ký, kết quả và bảng xếp hạng. Hai màn hình trong trận là cảnh biển động có hiệu ứng sóng quét khi vào trận. Xem [hướng dẫn giao diện và ảnh minh họa](UI_GUIDE.md).
+Kế hoạch hoàn thiện hiện tại: [PLAN.md](PLAN.md) — luồng người dùng, thứ tự triển khai, các chức năng cần bổ sung và tiêu chí nghiệm thu. Bản hoàn thiện 26/10/2026 bổ sung đổi mật khẩu, hạn chuẩn bị 120 giây, 5 mẫu bố trí, tình trạng kết nối, lịch sử có bộ lọc/phân trang và phục hồi kết quả chờ lưu.
+
+Giao diện **Naval Command**: đăng nhập, phòng chỉ huy, bố trí hạm đội có xem trước, chiến đấu với nhật ký, màn hình kết quả WIN/LOSE mở ra hai hải phận, lịch sử đấu xem lại được từng trận, cửa sổ cài đặt âm lượng và bảng xếp hạng. Hai màn hình trong trận là cảnh biển động có hiệu ứng sóng quét khi vào trận. Xem [hướng dẫn giao diện và ảnh minh họa](UI_GUIDE.md).
 
 Game bắn tàu đối kháng dùng Java SE, Swing và TCP Socket. Server quản lý tài khoản, sảnh, bàn cờ bí mật, lượt bắn, điểm và lịch sử. Giữ stack Java Swing/TCP và nguồn Word của đồ án. Server dùng SQLite JDBC được đóng gói trong `lib/`, không cần cài dịch vụ database riêng.
 
@@ -120,12 +122,15 @@ Test tự tạo thư mục `%TEMP%/battleship-*`, chọn cổng riêng bằng po
 
 1. Chạy server và mở ít nhất ba client bằng ba tài khoản khác nhau. Quan sát danh sách online; thử đăng nhập tài khoản đang dùng ở client thứ tư: phải bị từ chối.
 2. Client A tạo phòng, lấy mã sáu ký tự; B nhập mã. Hai người chuyển sang bố trí tàu, người quan sát thấy BUSY. Thử mã sai và tự join để thấy lỗi.
-3. Rời cửa sổ đặt tàu: cả hai về sảnh, không cộng điểm. Thử tiếp bằng lời mời Accept/Reject, rồi Quick Match; thử hủy tìm trận trước khi có người thứ hai.
+3. Rời màn hình đặt tàu bằng nút **× THOÁT VỀ SẢNH** (hoặc phím **ESC**, hoặc đóng cửa sổ): cả hai về sảnh, không cộng điểm và không bị phạt. Thử tiếp bằng lời mời Accept/Reject, rồi Quick Match; thử hủy tìm trận trước khi có người thứ hai.
 4. Đặt đúng 5 tàu `[5,4,3,3,2]`; có thể dùng Xếp tàu ngẫu nhiên. Bấm Ready: chờ xác nhận server rồi khóa sửa tàu. Thử Hủy sẵn sàng trước khi đối thủ Ready, sửa rồi Ready lại.
 5. Cả hai Ready: chỉ có một người được bắn trước. Chọn ô rồi Bắn. HIT/SUNK giữ lượt, MISS đổi lượt. Đợi 15 giây không bắn: mất lượt, không có phát bắn tự động.
 6. Bắn hết 17 ô tàu: thắng +3, thua +0, mỗi bên tăng một trận. Đầu hàng/đóng cửa sổ/mất kết nối khi đang đấu: người rời trận bị trừ 3 điểm (không dưới 0), cấm ghép trận 1 phút; đối thủ thắng +3. Sảnh hiển thị đếm ngược và khóa ghép nhanh, tạo/vào phòng, lời mời. Đăng nhập lại không xóa hạn phạt. Mở xếp hạng để kiểm tra số liệu.
 7. Sau kết thúc bình thường, cả hai Chơi lại trong 30 giây: trở lại đặt tàu với match ID mới, timer của ván hai hoạt động. Từ chối, thoát hoặc hết hạn thì về sảnh.
 8. Dừng server rồi chạy lại: điểm và lịch sử giữ nguyên. Có thể mở bốn client, ghép hai cặp và cho một trận timeout/thoát để chứng minh trận còn lại tiếp tục.
+9. Sau khi hết trận, xem chữ **WIN** hoặc **LOSE** rơi xuống rồi **hai hải phận mở tung**: bàn của bạn với các phát bắn của đối thủ và bàn đối thủ với các phát bắn của bạn, kèm điểm, số phát bắn, độ chính xác và lý do kết thúc.
+10. Mở **Lịch sử đấu** ở cột trái sảnh rồi nhấn vào dòng vừa đấu: màn hình hồi tượng mở ra với hai bàn cờ cùng danh sách đường đạn; dùng **Phát lại**/thanh trượt để tua tới từng phát, hoặc bấm một dòng để nhảy tới phát đó. Dòng ghi trước khi có tính năng sẽ báo không lưu hải phận, và chỉ hai người trong trận mở được.
+11. Mở **Cài đặt** (ở sảnh, màn hình bố trí tàu hoặc trong trận) để kéo ba mức âm lượng, tắt/bật âm thanh, sóng biển và bản đồ thu nhỏ; kéo thanh trượt có tiếng nghe thử ngay.
 
 Muốn quan sát HIT/SUNK nhanh, hai người có thể tự đặt tàu ngang lần lượt từ cột A ở các hàng 1–5, chiều dài 5,4,3,3,2. Trong demo bình thường, client vẫn không nhận board bí mật của đối thủ.
 
@@ -133,11 +138,11 @@ Muốn quan sát HIT/SUNK nhanh, hai người có thể tự đặt tàu ngang l
 
 Server lưu database SQLite tại **`data/battleship.db`** (tương đối với thư mục chạy lệnh). `accounts` chứa username, mật khẩu băm PBKDF2-HMAC-SHA256 có salt/120000 vòng, điểm, thống kê và hạn phạt; `matches` chứa lịch sử; `metadata` quản lý phiên bản schema. Transaction ghi tài khoản và kết quả cùng nhau. Không lưu mật khẩu gốc trong database. JDBC 3.53.4.0 nằm trong `lib/`; bản server JAR cần `dist/lib/` đi kèm.
 
-Lần đầu, server tự nhập `snapshot.json` hiện có; nếu chưa có snapshot thì nhập `users.json`/`matches.json`. ID, mật khẩu băm, điểm, lịch sử và thời gian phạt được giữ. File nguồn cũ được giữ nguyên làm bản lưu trước chuyển đổi, có thể còn thông tin đăng nhập cũ; server chỉ đọc database sau khi nhập thành công, không đồng bộ ngược JSON. Không khôi phục JSON cũ đè lên database đang sử dụng. Chỉ chạy một server trên mỗi thư mục dữ liệu; dừng server trước khi sao lưu/copy `battleship.db`.
+Lần đầu, server tự nhập `snapshot.json` hiện có; nếu chưa có snapshot thì nhập `users.json`/`matches.json`. ID, mật khẩu băm, điểm, lịch sử và thời gian phạt được giữ. File nguồn cũ được giữ nguyên làm bản lưu trước chuyển đổi, có thể còn thông tin đăng nhập cũ; server chỉ đọc database sau khi nhập thành công, không đồng bộ ngược JSON. Không khôi phục JSON cũ đè lên database đang sử dụng. Chỉ chạy một server trên mỗi thư mục dữ liệu; dừng server trước khi sao lưu; sao chép cả `battleship.db` và thư mục `pending-results/` nếu còn kết quả chờ.
 
-Trong sảnh chọn **Tài khoản**, nhập lại mật khẩu và xác nhận để xóa tài khoản đang đăng nhập. Server chỉ cho xóa khi ở sảnh, kiểm tra mật khẩu và chờ các kết quả chưa lưu. Username/hash bị xóa khỏi database đang dùng; lịch sử trận giữ ID ẩn danh để không làm sai thống kê đối thủ. Người chơi bị đăng xuất; nếu tạo lại cùng tên thì là tài khoản mới, không nhận lại điểm/ID cũ. Các bản lưu JSON có trước chuyển đổi không được tự xóa.
+Trong sảnh chọn **Tài khoản → Đổi mật khẩu** để nhập mật khẩu hiện tại, mật khẩu mới và xác nhận. Chỉ đổi khi rảnh ở sảnh (kể cả đang chờ hết phạt); không đổi khi tìm trận, ở phòng hoặc đang chơi. Đổi thành công giữ phiên hiện tại, ID, điểm, lịch sử và chat. Chọn **Tài khoản → Xóa tài khoản**, nhập lại mật khẩu và xác nhận để xóa tài khoản đang đăng nhập. Server chỉ cho xóa khi ở sảnh, kiểm tra mật khẩu và chờ các kết quả chưa lưu. Username/hash bị xóa khỏi database đang dùng; lịch sử trận giữ ID ẩn danh để không làm sai thống kê đối thủ. Người chơi bị đăng xuất; nếu tạo lại cùng tên thì là tài khoản mới, không nhận lại điểm/ID cũ. Các bản lưu JSON có trước chuyển đổi không được tự xóa.
 
-Rời trận online đang RUNNING bị trừ tối đa 3 điểm (không dưới 0) và cấm vào trận 60 giây. Đăng nhập/restart không xóa hạn phạt đã lưu. Nếu transaction thất bại, kết quả chờ trong RAM và retry mỗi giây; điểm chưa đổi, người rời trận vẫn bị chặn. Dừng/crash server khi còn kết quả chưa commit không bảo đảm lưu được kết quả đó.
+Rời trận online đang RUNNING bị trừ tối đa 3 điểm (không dưới 0) và cấm vào trận 60 giây. Đăng nhập/restart không xóa hạn phạt đã lưu. Trước khi cập nhật điểm, server đồng bộ kết quả vào journal `data/pending-results/`, rồi commit SQLite. Nếu transaction thất bại, điểm chưa đổi, người rời trận vẫn bị chặn; server thử lại mỗi giây và khi khởi động lại. Kết quả đã được ghi journal được phục hồi đúng một lần. Nếu journal cũng không ghi được thì kết quả chỉ còn trong RAM và chưa được bảo đảm qua crash; giao diện báo chờ lưu. Journal hỏng khiến khởi động thất bại có thông báo, giữ nguyên file để xử lý, không tự bỏ kết quả.
 
 Có thể dùng dữ liệu riêng cho demo/test:
 
@@ -148,6 +153,8 @@ java '-Dbattleship.data_dir=E:\battle-demo-data' '-Dfile.encoding=UTF-8' -cp 'bi
 | Property | Mặc định |
 | --- | ---: |
 | `battleship.turn_ms` | 15000 |
+| `battleship.placement_ms` | 120000 |
+| `battleship.slow_connection_ms` | 250 |
 | `battleship.heartbeat_ms` | 5000 |
 | `battleship.idle_ms` | 20000 |
 | `battleship.invite_ms` | 30000 |
@@ -165,19 +172,21 @@ Trong sảnh chọn **Đấu máy** rồi chọn Dễ/Vừa/Khó. Đây là luy�
 
 Đến lượt bạn, bản đồ đối thủ được phóng lớn để ngắm bắn; đến lượt đối thủ, bản đồ của bạn được phóng lớn để quan sát. Bật/tắt **Bản đồ thu nhỏ** ở góc trên; lựa chọn được lưu trên máy. Bom bay từ bản đồ nhỏ tới mục tiêu, với tia lửa và vòng nổ khi đánh chìm tàu. Hiệu ứng chỉ hiển thị kết quả server, không đổi luật hoặc kéo dài lượt.
 
-Nút **Âm thanh: Bật/Tắt** có trong sảnh và trận đấu. Âm thanh được tổng hợp tại máy, gồm bấm nút, chọn ô, phóng bom, trượt, trúng, chìm tàu, tới lượt, thắng/thua, tiếng nước bắn, tiếng sóng lớn và tiếng sonar; nền trận đấu là tiếng sóng biển lặp liền mạch. Không cần tải âm thanh từ Internet; máy không có thiết bị âm thanh vẫn chạy game.
+Nút **Cài đặt** ở sảnh, ở màn hình bố trí tàu và ở tiêu đề màn hình chiến đấu mở cửa sổ chỉnh **ba mức âm lượng** (tổng, hiệu ứng, tiếng biển) cùng các hộp kiểm **Bật âm thanh**, **Sóng biển động** và **Bản đồ thu nhỏ trong trận**; thay đổi áp dụng ngay và được ghi nhớ trên máy. Âm thanh được tổng hợp tại máy, gồm bấm nút, chọn ô, phóng bom, trượt, trúng, chìm tàu, tới lượt, thắng/thua, tiếng nước bắn, tiếng sóng lớn và tiếng sonar; nền trận đấu là tiếng sóng biển lặp liền mạch. Mọi tiếng vào/ra ở mức 0, tiếng ồn được lọc thông thấp và các tiếng lớn được xếp lớp nên nghe mềm, không "tách" hay giật ở đầu/cuối; tiếng biển tự hạ xuống khi có phát đạn lớn rồi trở lại. Không cần tải âm thanh từ Internet; máy không có thiết bị âm thanh vẫn chạy game.
 
 ## Cảnh biển trong trận
 
 Màn hình **Bố trí hạm đội** và **Chiến đấu** được dựng như đang ở ngoài biển: nền sóng cuộn nhiều lớp có bọt, mặt trời và cột nắng, hải âu, đảo xa và thuyền buồm; bàn cờ là mặt nước trong suốt có lưới ánh sáng, sonar quét qua và thước độ sâu; nhật ký hải chiến chạy ngang dưới bàn cờ. Khi vào trận có hiệu ứng **sóng quét qua màn hình** cùng tấm biển RA KHƠI/VÀO TRẬN, la bàn, tàu khu trục chạy ngang và các vòng sonar lan ra — hiệu ứng không chặn thao tác, bàn cờ và nút bắn vẫn dùng được ngay. Bắn trượt tạo cột nước bắn lên cùng vòng bọt, bắn trúng có cầu lửa và khói, tàu chìm sủi bọt khí.
 
-Cảnh biển vẽ hoàn toàn bằng Java2D (không tài nguyên ngoài), tự giảm tốc khi máy bận và tắt được bằng nút **Sóng biển: Bật/Tắt** trong trận hoặc **Biển động: Bật/Tắt** ở sảnh (lựa chọn được ghi nhớ trên máy). Ảnh và GIF minh họa nằm trong [UI_GUIDE.md](UI_GUIDE.md).
+Cảnh biển vẽ hoàn toàn bằng Java2D (không tài nguyên ngoài), tự giảm tốc khi máy bận và tắt được bằng hộp kiểm **Sóng biển** trong trận hoặc trong cửa sổ **Cài đặt** (lựa chọn được ghi nhớ trên máy). Ảnh và GIF minh họa nằm trong [UI_GUIDE.md](UI_GUIDE.md).
 
-## Lịch sử đấu và xem hạm đội đối thủ
+## Kết quả trận, lịch sử đấu và xem lại trận
 
-Sảnh có nút **Lịch sử đấu** để xem hồ sơ của chính bạn, và nút **Lịch sử** cạnh **Nhắn tin** để xem hồ sơ của người đang chọn. Cửa sổ hiển thị 20 trận gần nhất với đối thủ, kết quả thắng/thua, điểm nhận, số phát bắn, thời lượng và lý do kết thúc; dữ liệu đọc từ bảng `matches` trên server qua `GET_MATCH_HISTORY_REQ`, client không tự tính kết quả.
+Khi trận kết thúc, màn hình kết quả phủ toàn cửa sổ: chữ **WIN** (vàng – mint) hoặc **LOSE** (san hô – tím) rơi xuống từng chữ một kèm quầng sáng, vệt nắng quay và tàu chạy ngang khi thắng, hoặc mưa xiên và xác tàu chìm khi thua. Sau đó **hai hải phận mở tung từ đường giữa**: bên trái là hạm đội của bạn với các phát bắn của đối thủ, bên phải là hạm đội đối thủ (đã được server công bố) với các phát bắn của bạn, kèm số phát bắn, độ chính xác, thời lượng và lý do kết thúc. Hai nút **Chơi lại** và **Về phòng chỉ huy** dùng được ngay cả khi hiệu ứng đang chạy.
 
-Khi trận kết thúc, server gửi kèm hạm đội của đối phương trong `MATCH_END`, nên client công bố ngay hạm đội đó lên bàn cờ và thêm bảng báo cáo sau trận trong hộp kết quả: sơ đồ 10×10 với tàu đối phương, vết trúng `X`, vết trượt `●` và số phát bắn của đối thủ. Suốt trận, tọa độ tàu đối phương vẫn không được gửi về client.
+Sảnh có nút **Lịch sử đấu** ở cột bên trái để xem hồ sơ của chính bạn, và nút **Lịch sử** cạnh **Nhắn tin** để xem hồ sơ của người đang chọn. Cửa sổ hiển thị 20 trận mỗi trang; dùng **Xem thêm**, lọc **Tất cả/Thắng/Thua**, tên đối thủ và khoảng ngày `dd/MM/yyyy` theo múi giờ hiển thị. Bảng cuộn ngang khi cửa sổ nhỏ. Mỗi dòng có đối thủ, kết quả thắng/thua, điểm nhận, số phát bắn, thời lượng, lý do kết thúc và cột **Hải phận**; dữ liệu đọc từ bảng `matches` trên server, client không tự tính kết quả.
+
+**Nhấn vào một dòng để xem lại cả trận:** server trả hai hạm đội và toàn bộ nhật ký bắn (`GET_MATCH_DETAIL_REQ`), client mở màn hình hồi tượng với hai bàn cờ 10×10 cạnh nhau cùng danh sách đường đạn theo đúng thứ tự bắn. Thanh trượt và ba nút **Về đầu / Phát lại / Cuối** phát lại từng phát; bấm một dòng trong danh sách để nhảy tới phát đó và cả hai bàn cờ được dựng lại chính xác đến phát đang xem. Tàu của hai bên chỉ được lưu và công bố **sau khi trận kết thúc**, và chỉ hai đấu thủ của trận xem được (người khác nhận `FORBIDDEN`); trận cũ ghi trước khi có tính năng này báo không có dữ liệu. Suốt trận, tọa độ tàu đối phương vẫn không được gửi về client.
 
 Giao diện cũng được tăng màu: mỗi khu vực một màu nhấn (điểm hổ phách, thắng xanh lá, tỷ lệ xanh da trời, lịch sử hồng tím), thẻ nền chuyển hai màu, bảng tô màu theo cột, nhật ký trận tô màu theo từng phát bắn, và cảnh biển trong trận đổi sang hoàng hôn tím – cam – xanh ngọc.
 
@@ -211,3 +220,21 @@ Nếu không kết nối được: kiểm tra server còn chạy, host/cổng ch
 - [NETWORK_PROTOCOL.md](NETWORK_PROTOCOL.md): schema và mã lỗi; [GAME_RULES.md](GAME_RULES.md): luật cuối; [SYSTEM_ARCHITECTURE.md](SYSTEM_ARCHITECTURE.md): khóa, lifecycle và lưu trữ; [TASKS_AND_MEMBERS.md](TASKS_AND_MEMBERS.md): phân công, nguồn Word và kết quả test.
 
 TCP hiện tại không dùng TLS. Phạm vi là đồ án Java TCP trong môi trường demo/LAN; chưa kiểm thử triển khai Internet hoặc soak test dài ngày.
+
+## Luồng hoàn thiện và thử nhanh
+
+1. Đăng nhập: tên chưa tồn tại sẽ tạo tài khoản; màn hình có chú thích rõ.
+2. Vào trận: đặt tàu trong 120 giây, cảnh báo khi còn 30 giây. Ready/hủy Ready không gia hạn. Hết giờ chuẩn bị trả cả hai về sảnh, không tính trận hoặc phạt. Luyện tập và chơi lại cũng có hạn mới.
+3. Trong màn hình đặt tàu, bấm **Mẫu bố trí (5 ô lưu)**; chọn ô để lưu/dùng/đổi tên/xóa. Chỉ lưu bộ tàu hợp lệ; mẫu theo máy chủ và ID tài khoản trên máy đang dùng. Ready khóa cả mẫu và bàn cờ.
+4. Sảnh/đặt tàu/chiến đấu hiển thị thời gian khứ hồi: dưới 250 ms là kết nối tốt, từ 250 ms là chậm. Đang đo hoặc mất kết nối có trạng thái riêng; độ trễ không thay đổi luật 15 giây.
+5. Kết quả chờ lưu khóa chơi lại; sau khi lưu xong, điểm trên màn hình kết quả được cập nhật. Trận do rời/mất mạng trở về sảnh theo luồng hiện có.
+6. Lịch sử hỗ trợ tải thêm/lọc; đổi lọc sẽ bỏ phản hồi của truy vấn cũ. Replay vẫn chỉ dành cho hai đấu thủ.
+
+Kiểm thử riêng phần hoàn thiện: `powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Upgrade`; giao diện: thêm `-UpgradeGui -RealTimer` thay cho `-Upgrade`. Bộ kiểm thử mặc định và `-Gui -RealTimer` cũng bao gồm các ca mới.
+
+Script Windows ưu tiên JAVA_HOME, sau đó Java trực tiếp trong PATH và các JDK cài ở Program Files. Các shim Oracle javapath được bỏ qua để tránh treo launcher; không thay cấu hình Java toàn máy.
+
+Sao lưu: dừng server, sao chép nguyên thư mục dữ liệu gồm database và `pending-results/`, khôi phục cùng nhau vào thư mục riêng rồi chỉ chạy một server. Journal giới hạn 64 MiB, mỗi kết quả tối đa 1 MiB; file được dọn sau commit. File `.tmp` chưa công bố được giữ để đối chiếu và báo trong log. Bảo đảm đã kiểm chứng là phục hồi sau crash tiến trình; chưa kiểm chứng mất điện đột ngột hoặc hỏng thiết bị lưu trữ.
+
+
+Sau khi build, kiểm tra bản JAR bằng `powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Package -RealTimer`. Lệnh này chạy server JAR từ thư mục tạm và client từ JAR độc lập; không dùng dữ liệu thật. Bằng chứng nghiệm thu ngày 26/10 nằm trong TASKS_AND_MEMBERS.md; LAN hai máy, macOS và runtime Java 8 vẫn NOT-RUN.

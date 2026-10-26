@@ -50,7 +50,8 @@ public class LoginFrame extends JFrame {
         showPassword.setBorder(BorderFactory.createEmptyBorder());showPassword.setMargin(new Insets(0,0,0,0));
         final char echo = txtPassword.getEchoChar();
         showPassword.addActionListener(e -> txtPassword.setEchoChar(showPassword.isSelected() ? (char)0 : echo));
-        Theme.addStack(form, showPassword, 22);
+        Theme.addStack(form, showPassword, 8);
+        Theme.addStack(form, Theme.muted("Tên chưa tồn tại sẽ được tạo thành tài khoản mới."), 16);
         btnLogin.setPreferredSize(new Dimension(220,48));
         btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE,48));
         Theme.styleButton(btnLogin,Theme.MINT,Theme.BG_DARK);

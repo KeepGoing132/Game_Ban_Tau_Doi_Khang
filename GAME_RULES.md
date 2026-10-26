@@ -1,12 +1,12 @@
 # Luật Battleship Online
 
-Đặc tả triển khai thống nhất theo đề bài BANTAUDOIKHANG.docx, bốn báo cáo và quyết định tại PLAN_GPT_6_1_SOL.md, cập nhật 04/10/2026.
+Đặc tả luật đã triển khai, đối chiếu đề bài BANTAUDOIKHANG.docx và bốn báo cáo. Lộ trình hoàn thiện nằm trong [PLAN.md](PLAN.md); bản hoàn thiện ngày 26/10/2026 thêm hạn chuẩn bị như mô tả dưới đây.
 
 ## Bàn cờ và đặt tàu
 
 Bàn 10×10, `x=col`, `y=row`, chỉ số 0..9. Bộ tàu đúng `[5,4,3,3,2]`, tổng 17 ô. ID tàu riêng biệt; tọa độ nguyên, thẳng ngang/dọc và liên tục; không vượt biên hoặc chồng ô. Tàu sát nhau vẫn hợp lệ. Server validate board tạm rồi mới thay board đã chấp nhận; board sai không làm mất bố trí cũ.
 
-Match bắt đầu ở PLACING. Client gửi PLACE_SHIPS_REQ, đợi PLACE_SHIPS_RESP rồi mới PLAYER_READY_REQ với ready=true. Ready chỉ thành công nếu board hợp lệ; sau Ready khóa sửa tàu và click board. Có thể ready=false khi còn PLACING, chỉ mở sửa sau xác nhận server. Hai Ready chuyển RUNNING một lần; Ready lặp không chọn lại người đi trước/reset timer. Người đi trước được chọn ngẫu nhiên 50/50.
+Match bắt đầu ở PLACING với hạn 120 giây khi có đủ hai bên; áp dụng cả luyện tập và chơi lại. Ready/hủy Ready không gia hạn. Trước deadline, hai Ready hợp lệ bắt đầu trận. Tại/sau deadline mà chưa bắt đầu, server hủy chuẩn bị và đưa cả hai về sảnh, không tính điểm/trận/phạt. Callback chuẩn bị cũ không tác động trận đang chạy hoặc ván mới. Client gửi PLACE_SHIPS_REQ, đợi PLACE_SHIPS_RESP rồi mới PLAYER_READY_REQ với ready=true. Ready chỉ thành công nếu board hợp lệ; sau Ready khóa sửa tàu và click board. Có thể ready=false khi còn PLACING, chỉ mở sửa sau xác nhận server. Hai Ready chuyển RUNNING một lần; Ready lặp không chọn lại người đi trước/reset timer. Người đi trước được chọn ngẫu nhiên 50/50.
 
 ## Lượt bắn và timeout
 
@@ -33,7 +33,7 @@ Kết thúc có một đường xử lý duy nhất. Thắng +3, một trận th
 
 Hạn phạt 60 giây tính từ lúc server xác định rời trận, được lưu cùng điểm và lịch sử trong transaction SQLite nguyên tử theo match ID. Đăng xuất, đăng nhập lại hay khởi động lại server không xóa hạn phạt đã lưu. Trong thời gian phạt, server chặn ghép nhanh, tạo/vào phòng, gửi/nhận lời mời và chơi lại; hết hạn tự trở về IDLE. UI hiển thị thời gian còn lại, server quyết định quyền vào trận. Bản ghi cũ không bị phạt hồi tố.
 
-Nếu storage lỗi thì kết quả chờ lưu, không công bố đã lưu/thay đổi điểm thành công; người rời trận vẫn bị chặn ghép cho đến khi lưu thành công và đủ 60 giây. Retry không đặt lại thời điểm hết hạn.
+Nếu storage lỗi thì kết quả chờ lưu, không công bố đã lưu/thay đổi điểm thành công; người rời trận vẫn bị chặn ghép cho đến khi lưu thành công và đủ 60 giây. Retry không đặt lại thời điểm hết hạn. Kết quả được ghi journal trước commit và đọc lại sau restart; kết quả đã commit không áp dụng lại. Chỉ khi journal cũng chưa ghi được thì kết quả còn phụ thuộc RAM.
 
 Kết thúc bình thường giữ POST_GAME tối đa 30 giây. Hai bên cùng đồng ý thì tạo MatchSession và match_id mới trong cùng phòng, đặt lại tàu và có timer mới. Từ chối, thoát, mất kết nối hoặc hết hạn đưa cả hai về IDLE. Đầu hàng/ngắt mạng hủy phòng ngay sau xử lý kết quả.
 

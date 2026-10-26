@@ -3,6 +3,7 @@ dist/
 references/
 data/*.db
 data/*.db-*
+data/pending-results/
 *.class
 .vscode/
 .idea/

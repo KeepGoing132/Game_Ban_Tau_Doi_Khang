@@ -1,6 +1,6 @@
 # Giao thức Battleship Online
 
-Đặc tả wire cuối, cập nhật 04/10/2026. Client và server trong repository cần được build cùng phiên bản.
+Đặc tả wire, cập nhật 26/10/2026. Client và server trong repository cần được build cùng phiên bản.
 
 ## Transport và envelope
 
@@ -35,11 +35,13 @@ Các số x/y/size/user ID/turn_id phải là JSON integer, không phải chuỗ
 | HEARTBEAT_REQ | {} | HEARTBEAT_RESP |
 | LOGIN_REQ | username, password (String) | LOGIN_RESP: user_id, username, total_points/wins/games, win_rate, status, phase; sau đó ONLINE_USERS_RESP snapshot |
 | LOGOUT_REQ | {} | LOGOUT_RESP sau cleanup |
+| CHANGE_PASSWORD_REQ | old_password, new_password (String) | CHANGE_PASSWORD_RESP sau commit; chỉ IDLE/COOLDOWN |
 | DELETE_ACCOUNT_REQ | password (String) | DELETE_ACCOUNT_RESP sau transaction xóa và logout; chỉ tài khoản của socket, chỉ ở sảnh |
 | BOT_MATCH_REQ | difficulty: EASY/MEDIUM/HARD | BOT_MATCH_RESP rồi MATCH_FOUND có practice=true và opponent_id âm |
 | GET_ONLINE_USERS_REQ | {} | ONLINE_USERS_RESP: users[] |
 | GET_LEADERBOARD_REQ | {} | LEADERBOARD_RESP: leaderboard[], rank và các trường public user |
-| GET_MATCH_HISTORY_REQ | target_user_id (0 = chính mình), limit (1–50, mặc định 20) | MATCH_HISTORY_RESP: user_id, username, total_games/wins/points, matches[] mới nhất trước |
+| GET_MATCH_HISTORY_REQ | target_user_id (0 = chính mình), limit (1–50, mặc định 20), result/opponent/from_ms/to_ms/cursor tùy chọn | MATCH_HISTORY_RESP: user_id, username, total_games/wins/points, matches[], has_more, next_cursor |
+| GET_MATCH_DETAIL_REQ | match_id (String) | MATCH_DETAIL_RESP: match_id, opponent_id/name, won, points, reason, duration_seconds, ended_at_ms, my_shots, opponent_shots, my_ships[], opponent_ships[], shot_log[], replay_available |
 | CREATE_ROOM_REQ | {} | CREATE_ROOM_RESP: room_code, room_id |
 | JOIN_ROOM_REQ | room_code | JOIN_ROOM_RESP: room_id, match_id hoặc ERROR |
 | LEAVE_ROOM_REQ | match_id khi có trận; room_id khi phòng chờ | LEAVE_ROOM_RESP |
@@ -66,7 +68,11 @@ Ships schema:
 {"id":"CARRIER","size":5,"coordinates":[{"x":0,"y":0},{"x":1,"y":0},{"x":2,"y":0},{"x":3,"y":0},{"x":4,"y":0}]}
 ```
 
-Lịch sử đấu (`MATCH_HISTORY_RESP`) chỉ chứa dữ liệu công khai của từng trận đã lưu: `match_id`, `opponent_id`, `opponent_name`, `won`, `points` (điểm người được hỏi nhận), `shots`, `duration_seconds`, `reason`, `ended_at_ms`, `legacy`. Không có tọa độ tàu trong lịch sử. Chỉ socket đã đăng nhập gọi được; `target_user_id=0` là tài khoản của chính socket, tài khoản đã xóa trả về tên ẩn danh.
+Lịch sử đấu (`MATCH_HISTORY_RESP`) chỉ chứa dữ liệu công khai của từng trận đã lưu: `match_id`, `opponent_id`, `opponent_name`, `won`, `points` (điểm người được hỏi nhận), `shots`, `duration_seconds`, `reason`, `ended_at_ms`, `legacy`, `replay`. Không có tọa độ tàu trong lịch sử. Chỉ socket đã đăng nhập gọi được; `target_user_id=0` là tài khoản của chính socket, tài khoản đã xóa trả về tên ẩn danh.
+
+Khi trận kết thúc, server lưu kèm kết quả hai hạm đội đã niêm phong và toàn bộ nhật ký bắn (`player1Ships`, `player2Ships`, `shotLog` trong payload của bảng `matches`). `replay=true` báo trận có dữ liệu đó; bản ghi cũ không có thì vẫn xem được lịch sử nhưng `replay=false`.
+
+`GET_MATCH_DETAIL_REQ` mở lại một trận đã kết thúc cho **chính hai đấu thủ của trận đó**: `my_ships`/`opponent_ships` theo đúng góc nhìn người hỏi, `shot_log` là mảng theo thứ tự bắn với mỗi phần tử `{turn_id, shooter_id, x, y, result, sunk_ship_coords, sunk_ship_name}` (`sunk_ship_coords`/`sunk_ship_name` chỉ có khi `result=SUNK`). Trận của người khác trả `FORBIDDEN`, mã trận không tồn tại trả `MATCH_NOT_FOUND`, trận không có dữ liệu lưu trả `REPLAY_UNAVAILABLE`, `match_id` rỗng trả `INVALID_MESSAGE`. Tọa độ tàu vẫn không rời server trong lúc trận đang chạy.
 
 Mảng ships phải có đủ năm tàu theo [5,4,3,3,2], ID riêng biệt, tọa độ nguyên và hình học liên tục. ID tàu không rỗng, tối đa 64 ký tự. Payload sai không thay board đã nhận. Client đợi PLACE_SHIPS_RESP rồi mới Ready.
 
@@ -99,7 +105,7 @@ turn_id bắt đầu 1, tăng sau từng phát bắn hợp lệ (kể cả HIT/S
 
 ## Mã lỗi
 
-`INVALID_MESSAGE`, `UNKNOWN_TYPE`, `UNAUTHENTICATED`, `AUTH_FAILED`, `ALREADY_LOGGED_IN`, `INVALID_STATE`, `MATCHMAKING_COOLDOWN`, `ROOM_NOT_FOUND`, `ROOM_FULL`, `INVITE_EXPIRED`, `INVALID_FLEET`, `OUT_OF_BOUNDS`, `OVERLAP`, `DUPLICATE_SHIP_ID`, `NOT_READY`, `NOT_YOUR_TURN`, `ALREADY_SHOT`, `STALE_MATCH`, `STALE_TURN`, `TURN_EXPIRED`, `STORAGE_ERROR`.
+`INVALID_MESSAGE`, `UNKNOWN_TYPE`, `UNAUTHENTICATED`, `AUTH_FAILED`, `ALREADY_LOGGED_IN`, `INVALID_STATE`, `MATCHMAKING_COOLDOWN`, `ROOM_NOT_FOUND`, `ROOM_FULL`, `INVITE_EXPIRED`, `INVALID_FLEET`, `OUT_OF_BOUNDS`, `OVERLAP`, `DUPLICATE_SHIP_ID`, `NOT_READY`, `NOT_YOUR_TURN`, `ALREADY_SHOT`, `STALE_MATCH`, `STALE_TURN`, `TURN_EXPIRED`, `STORAGE_ERROR`, `MATCH_NOT_FOUND`, `FORBIDDEN`, `REPLAY_UNAVAILABLE`.
 
 `MATCHMAKING_COOLDOWN` trả data gồm `user_id` của người bị phạt và ba trường thời gian/phạt nêu trên. Có thể là người gửi yêu cầu hoặc người được mời; client chỉ áp dụng đếm ngược cho chính mình khi user_id khớp. Chặn cả ghép nhanh, tạo/vào phòng, lời mời và đồng ý chơi lại. `penalty_pending=true` vẫn chặn khi thời gian còn lại bằng 0, cho đến khi lưu kết quả thành công.
 
@@ -139,3 +145,14 @@ Giữ JSON theo dòng theo quy tắc repository thay framing length-prefix trong
 | GAME_OVER | MATCH_END |
 
 Phần shared/module giữ ranh giới phân công Dương/Bảo/Hải/Khoa như báo cáo. Các nguồn Word giữ nguyên, đặc tả này là hợp đồng client/server đang chạy.
+
+## Các trường bổ sung của bản hoàn thiện
+
+- CHANGE_PASSWORD_REQ: old_password và new_password là chuỗi, mật khẩu mới 1–128 ký tự và không toàn khoảng trắng. Người dùng lấy từ socket; user_id tự khai không chọn được tài khoản khác. Thành công trả CHANGE_PASSWORD_RESP với request_id; sai mật khẩu → AUTH_FAILED, dữ liệu sai → INVALID_MESSAGE, chưa login → UNAUTHENTICATED, không ở sảnh rảnh → INVALID_STATE, ghi lỗi → STORAGE_ERROR. Giữ phiên; response không có hash/password.
+- ROOM_USER_JOINED, MATCH_FOUND, INVITE_RESULT ghép cặp và REMATCH_START thêm placement_deadline_ms và placement_limit_ms (mặc định 120000). Client đếm theo server_time_ms; Ready không reset hạn. Đến hạn trả ROOM_USER_LEFT có lý do hết chuẩn bị; yêu cầu đặt/Ready tại/sau hạn có thể trả PLACEMENT_EXPIRED trước release. Không tính điểm/trận/phạt.
+- HEARTBEAT_REQ/RESP giữ schema; phản hồi lặp request_id để đo nanoTime khứ hồi trong đúng phiên. Số ms chỉ là thông tin giao diện.
+- RESULT_SAVED_NOTIFY là event có match_id, room_id và scores cùng schema MATCH_END; phát cho phiên trận còn giữ khi pending commit thành công. Client cập nhật điểm và trạng thái lưu của kết quả. Broadcast public user đồng bộ sảnh kể cả khi trận đã release.
+- Lịch sử: result = ALL/WIN/LOSS (mặc định ALL); opponent tìm trong tên đối thủ, tối đa 64 ký tự, không phân biệt hoa thường; from_ms/to_ms là epoch ms nguyên không âm, hai đầu bao gồm. Thiếu cận tương ứng 0/Long.MAX_VALUE. UI đổi dd/MM/yyyy theo múi giờ hiển thị thành khoảng epoch này.
+- cursor là chuỗi opaque từ next_cursor trang trước, phải dùng đúng target/bộ lọc. Không tự ghép cursor với truy vấn khác. Cursor/phạm vi sai trả INVALID_MESSAGE. has_more=false thì next_cursor rỗng. Đổi lọc bỏ cursor, tạo request_id mới; phản hồi cũ không thay dữ liệu đang xem.
+
+Mẫu bố trí là dữ liệu cục bộ, không có thông điệp server mới; Ready vẫn gửi PLACE_SHIPS_REQ hiện hành.
