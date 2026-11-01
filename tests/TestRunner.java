@@ -11,6 +11,8 @@ public class TestRunner {
         throw new AssertionError("Accepted malformed JSON: " + json);
     }
     public static void main(String[] args) throws Exception {
+        // MySQL backs every storage test; drop the schemas of earlier runs first.
+        tests.Db.cleanupTestSchemas();
         if(args.length>0 && "fail".equals(args[0]))throw new AssertionError("Intentional runner failure probe");
         if(args.length>0 && "upgrade".equals(args[0])){UpgradeTests.run();System.exit(0);}
         if(args.length>0 && "upgradegui".equals(args[0])){try{UpgradeSwingTests.run();System.exit(0);}catch(Throwable e){e.printStackTrace();System.exit(1);}}

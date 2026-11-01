@@ -111,7 +111,7 @@ public class IntegrationTests {
             System.out.println("PASS TCP: framing/auth/presence/rooms/invites/queue/fleet/combat/rematch/timeout/disconnect (4 clients)");
         }finally{server.stop();thread.join(5000);check(!thread.isAlive(),"server shutdown");}
         StorageManager restarted=new StorageManager(dir);check(restarted.getMatchRecords().size()==3,"restart history count");for(MatchRecord r:restarted.getMatchRecords()){check(r.getTimestamp()==r.getEndedAt() && r.getStartedAt()>0,"timestamps survived restart");check(restarted.commitResult(r),"repeat commit acknowledged");}check(restarted.getMatchRecords().size()==3,"repeat commits idempotent");
-        check(Files.exists(dir.resolve("battleship.db")) && new String(Files.readAllBytes(dir.resolve("battleship.db")),StandardCharsets.ISO_8859_1).startsWith("SQLite format 3"),"real SQLite database");
+        java.util.List<String> tables=Db.tables(dir);check(tables.containsAll(java.util.Arrays.asList("accounts","matches","chat_messages","metadata")),"real MySQL schema with all four tables, got "+tables);
         System.out.println("PASS restart/atomic history/idempotent scoring; temporary data: "+dir);
     }
 }

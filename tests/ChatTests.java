@@ -40,9 +40,9 @@ public final class ChatTests {
             check(JsonUtil.getList(ok(c,new Message(MessageType.CHAT_CONVERSATIONS_REQ)).getData(),"conversations").isEmpty(),"conversation list is private");
             IntegrationTests.error(c,new Message(MessageType.CHAT_HISTORY_REQ).put("peer_id",bob).put("before_id",-1),"INVALID_MESSAGE");
             // A persistence failure must not acknowledge or deliver a message.
-            try(Connection db=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));Statement s=db.createStatement()){s.execute("CREATE TRIGGER chat_fail BEFORE INSERT ON chat_messages BEGIN SELECT RAISE(ABORT,'test disk failure'); END");}
+            Db.breakChatWrites(dir,"chat_fail");
             IntegrationTests.error(b,send(alice,"fail-save","fail-save"),"STORAGE_ERROR");noChat(a);
-            try(Connection db=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));Statement s=db.createStatement()){s.execute("DROP TRIGGER chat_fail");}
+            Db.restoreChatWrites(dir,"chat_fail");
             ok(b,send(alice,"Đã lưu thành công","saved-2"));a.waitType(MessageType.CHAT_MSG);
             // Both players can chat during placement and RUNNING without advancing a turn.
             String match=IntegrationTests.queuePair(a,b);ok(a,send(bob,"Sẵn sàng chưa?","placing"));b.waitType(MessageType.CHAT_MSG);

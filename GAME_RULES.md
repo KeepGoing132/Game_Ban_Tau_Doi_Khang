@@ -31,7 +31,7 @@ Quyết định mất lượt thay mô tả auto-fire cũ, phù hợp KHOA-05 tr
 
 Kết thúc có một đường xử lý duy nhất. Thắng +3, một trận thắng và một trận chơi; thua do bị bắn chìm hết tàu +0 và một trận chơi. Rời trận đang RUNNING bị trừ `min(3, tổng điểm hiện tại)` và tính một trận chơi. Mỗi trận chỉ xử phạt một lần; yêu cầu thoát lặp không trừ thêm hoặc kéo dài hạn phạt. Server chủ động dừng không phạt người chơi.
 
-Hạn phạt 60 giây tính từ lúc server xác định rời trận, được lưu cùng điểm và lịch sử trong transaction SQLite nguyên tử theo match ID. Đăng xuất, đăng nhập lại hay khởi động lại server không xóa hạn phạt đã lưu. Trong thời gian phạt, server chặn ghép nhanh, tạo/vào phòng, gửi/nhận lời mời và chơi lại; hết hạn tự trở về IDLE. UI hiển thị thời gian còn lại, server quyết định quyền vào trận. Bản ghi cũ không bị phạt hồi tố.
+Hạn phạt 60 giây tính từ lúc server xác định rời trận, được lưu cùng điểm và lịch sử trong transaction MySQL nguyên tử theo match ID. Đăng xuất, đăng nhập lại hay khởi động lại server không xóa hạn phạt đã lưu. Trong thời gian phạt, server chặn ghép nhanh, tạo/vào phòng, gửi/nhận lời mời và chơi lại; hết hạn tự trở về IDLE. UI hiển thị thời gian còn lại, server quyết định quyền vào trận. Bản ghi cũ không bị phạt hồi tố.
 
 Nếu storage lỗi thì kết quả chờ lưu, không công bố đã lưu/thay đổi điểm thành công; người rời trận vẫn bị chặn ghép cho đến khi lưu thành công và đủ 60 giây. Retry không đặt lại thời điểm hết hạn. Kết quả được ghi journal trước commit và đọc lại sau restart; kết quả đã commit không áp dụng lại. Chỉ khi journal cũng chưa ghi được thì kết quả còn phụ thuộc RAM.
 

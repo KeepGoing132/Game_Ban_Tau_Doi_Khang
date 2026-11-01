@@ -116,7 +116,7 @@ public final class ReplayTests {
         MatchRecord record = restored.findMatch(matchId);
         check(record != null && record.hasReplay(), "sealed fleets survive a server restart");
         check(record.getShotLog().size() == shots, "shot log survives a server restart");
-        check(record.getPlayer1Ships().size() == 5 && record.getPlayer2Ships().size() == 5, "both fleets reload from SQLite");
+        check(record.getPlayer1Ships().size() == 5 && record.getPlayer2Ships().size() == 5, "both fleets reload from MySQL");
         legacy();
         System.out.println("PASS replay: sealed fleets + shot log stored, mirrored per player, restart-safe, participants only, legacy rows still readable");
     }

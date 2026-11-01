@@ -1,6 +1,6 @@
 # Kiến trúc Battleship Online
 
-Java SE/Swing, TCP JSON UTF-8 theo dòng, SQLite JDBC cho lưu trữ. Server là trọng tài duy nhất giữ bàn cờ bí mật và quyết định mọi thay đổi. Tài liệu này mô tả kiến trúc đã triển khai; lộ trình hoàn thiện nằm trong [PLAN.md](PLAN.md).
+Java SE/Swing, TCP JSON UTF-8 theo dòng, MySQL (JDBC) cho lưu trữ. Server là trọng tài duy nhất giữ bàn cờ bí mật và quyết định mọi thay đổi. Tài liệu này mô tả kiến trúc đã triển khai; lộ trình hoàn thiện nằm trong [PLAN.md](PLAN.md).
 
 ## Cấu trúc
 
@@ -11,7 +11,7 @@ Java SE/Swing, TCP JSON UTF-8 theo dòng, SQLite JDBC cho lưu trữ. Server là
 | Tài khoản | UserManager đăng nhập nguyên tử, một handler sở hữu user; PasswordHasher PBKDF2 có salt, thuật toán/v1/số vòng trong chuỗi hash; presence snapshot |
 | Lobby | LobbyManager room registry, queue, invitation có id/expiry, một thao tác pair dùng chung cho các lối vào trận |
 | Trận | MatchManager membership/session registry và scheduler; MatchSession board, Ready, deadline, lượt, kết thúc và rematch agreement |
-| Storage | StorageManager import legacy, transaction SQLite accounts+matches, chống lặp theo match ID, pending retry |
+| Storage | StorageManager import legacy, transaction MySQL accounts+matches, chống lặp theo match ID, pending retry |
 | Client | SocketClient quản lý từng generation connection; ClientController state/events; LoginFrame, LobbyFrame, PlacementPanel, BattlePanel, LeaderboardDialog |
 
 ## Trạng thái
@@ -55,9 +55,9 @@ Match deadline dùng đồng hồ đơn điệu, turn_id tăng mỗi hành độ
 
 `SqliteStore` là adapter JDBC cho `data/battleship.db`; `StorageManager` giữ giao diện nghiệp vụ và cache tài khoản/kết quả. Mỗi lần ghi mở connection ngắn, prepared statements và một transaction accounts+matches; chỉ cập nhật RAM sau commit. Bật synchronous=FULL, secure_delete=ON và busy timeout. match_id duy nhất chống ghi lặp. Các kiểm thử lỗi ghi vẫn inject tại writeSnapshot (tên giữ tương thích test, hiện thực ghi SQL).
 
-Lần đầu nhập JSON cũ trong một transaction, giữ ID/hash/điểm/lịch sử/hạn phạt. Marker schema_version chỉ được ghi sau nhập thành công; khởi động sau dùng SQLite. JSON nguồn được giữ nguyên, không ghi tiếp. Mật khẩu là PBKDF2-HMAC-SHA256 có salt. Xóa tài khoản yêu cầu xác thực lại, chỉ ở sảnh; transaction bỏ username/hash, ẩn danh tên trong lịch sử. Một tombstone theo ID duy trì tham chiếu lịch sử và không xuất hiện trong login/xếp hạng.
+Lần đầu nhập JSON cũ trong một transaction, giữ ID/hash/điểm/lịch sử/hạn phạt. Marker schema_version chỉ được ghi sau nhập thành công; khởi động sau dùng MySQL. JSON nguồn được giữ nguyên, không ghi tiếp. Mật khẩu là PBKDF2-HMAC-SHA256 có salt. Xóa tài khoản yêu cầu xác thực lại, chỉ ở sảnh; transaction bỏ username/hash, ẩn danh tên trong lịch sử. Một tombstone theo ID duy trì tham chiếu lịch sử và không xuất hiện trong login/xếp hạng.
 
-Hạn phạt rời trận là endedAt+60000, trừ min(3, điểm). Pending chưa lưu vẫn chặn ghép; retry không kéo dài hạn phạt. ResultJournal ghi từng kết quả vào file tạm, đồng bộ FileDescriptor rồi atomic move sang file chính; SQLite commit xong mới dọn journal. Khởi động đọc/kiểm tra phiên bản và SHA-256, nạp pending trước khi mở socket và thử commit theo match_id. Journal hỏng giữ nguyên và dừng khởi động; file tạm chưa công bố chỉ được báo, không tự áp dụng. Nếu chưa ghi journal được, kết quả chỉ nằm trong RAM và chưa bền vững. File DB và mọi bản lưu cũ chứa thông tin nhạy cảm cần được quản lý như dữ liệu tài khoản.
+Hạn phạt rời trận là endedAt+60000, trừ min(3, điểm). Pending chưa lưu vẫn chặn ghép; retry không kéo dài hạn phạt. ResultJournal ghi từng kết quả vào file tạm, đồng bộ FileDescriptor rồi atomic move sang file chính; MySQL commit xong mới dọn journal. Khởi động đọc/kiểm tra phiên bản và SHA-256, nạp pending trước khi mở socket và thử commit theo match_id. Journal hỏng giữ nguyên và dừng khởi động; file tạm chưa công bố chỉ được báo, không tự áp dụng. Nếu chưa ghi journal được, kết quả chỉ nằm trong RAM và chưa bền vững. Schema MySQL, journal và mọi bản lưu cũ chứa thông tin nhạy cảm cần được quản lý như dữ liệu tài khoản. Khác SQLite, MySQL không có tuỳ chọn ghi đè trang dữ liệu đã xoá: bản ghi bị xoá/ẩn danh không còn đọc được qua SQL, nhưng dữ liệu cũ trong InnoDB chỉ mất khi trang được tái sử dụng, nên đừng xem đây là cách xoá an toàn.
 
 ## Máy chơi
 
@@ -79,7 +79,7 @@ Server chỉ phát kết quả ô đã bắn và tọa độ tàu đã chìm, kh
 
 Lịch sử chỉ truy vấn cặp `(current_user,peer_id)`, lấy 21 hàng để trả 20 hàng + `has_more`, sắp ID tăng dần phía response. Danh sách 100 cuộc trò chuyện gần nhất chỉ thuộc current user. Không giữ bản sao tên cũ trong bảng tin nhắn: query join accounts, hiển thị tên ẩn danh nếu tài khoản đã xóa. Nội dung tin cũ giữ cho người còn lại, ID người dùng không tái sử dụng.
 
-Client có `ChatController` riêng cho mỗi lần đăng nhập. Cache theo peer và ID tin, tránh trùng khi history và event đến xen kẽ; draft và pending request tách theo cuộc trò chuyện. `ChatPanel` được gắn vào layered pane của cửa sổ hiện tại, thu gọn còn thanh tiêu đề và không thay đổi layout bản đồ. Không block EDT để chờ mạng. Đăng xuất/mất kết nối tháo overlay và xóa cache phiên. Tin chưa đọc là trạng thái của phiên client; lịch sử nội dung nằm trong SQLite, không phụ thuộc cache này.
+Client có `ChatController` riêng cho mỗi lần đăng nhập. Cache theo peer và ID tin, tránh trùng khi history và event đến xen kẽ; draft và pending request tách theo cuộc trò chuyện. `ChatPanel` được gắn vào layered pane của cửa sổ hiện tại, thu gọn còn thanh tiêu đề và không thay đổi layout bản đồ. Không block EDT để chờ mạng. Đăng xuất/mất kết nối tháo overlay và xóa cache phiên. Tin chưa đọc là trạng thái của phiên client; lịch sử nội dung nằm trong MySQL, không phụ thuộc cache này.
 
 ## Phân công và kiểm chứng
 
@@ -95,7 +95,7 @@ Dương: TCP/xác thực/presence; Bảo: room/queue/invitation; Hải: board/pl
 | PLACING | PLACE_SHIPS_REQ → PLAYER_READY_REQ | Match lock, thời hạn chuẩn bị, validate board tạm | Ready ack khóa sửa; hai Ready hợp lệ trước hạn → RUNNING |
 | PLACING | Hết hạn/rời phòng | CANCELLED, callback ra ngoài match lock rồi registry release | Cả hai LOBBY, không tính điểm/phạt |
 | RUNNING | FIRE_REQ | Kiểm tra match/turn/deadline, bắn và đổi/giữ lượt | FIRE_RESULT/TURN_CHANGE; lỗi không đổi deadline/count |
-| RUNNING | Hết tàu/đầu hàng/mất kết nối | FINISHED, journal → SQLite → cập nhật RAM | MATCH_END, điểm/trạng thái lưu; pending thì khóa rematch |
+| RUNNING | Hết tàu/đầu hàng/mất kết nối | FINISHED, journal → MySQL → cập nhật RAM | MATCH_END, điểm/trạng thái lưu; pending thì khóa rematch |
 | FINISHED | Retry lưu thành công | Commit đúng một lần, dọn journal, broadcast thống kê | RESULT_SAVED_NOTIFY cập nhật điểm/nút nếu còn cùng trận |
 | POST_GAME | Hai bên chấp nhận rematch | Registry thay phiên cũ bằng phiên và mã mới | PLACING với deadline chuẩn bị mới |
 | LOBBY | GET_MATCH_HISTORY_REQ | SQL có bộ lọc/cursor, mỗi trang ≤50 | MATCH_HISTORY_RESP; controller chỉ nhận request mới nhất |
@@ -105,7 +105,7 @@ ClientController định tuyến sau kiểm tra request/phiên sang handleAccoun
 
 SocketClient gửi heartbeat có request_id, giữ mốc nanoTime và chỉ đo phản hồi khớp trong cùng generation. Callback về EDT được kiểm tra generation lần nữa; không dùng ping để đổi lượt hoặc xử thắng/thua.
 
-Lịch sử dùng SQLite với chỉ số theo player1/player2, thời điểm kết thúc và match_id. Cursor mang bộ lọc/tài khoản, mốc rowid của trang đầu và khóa cuối; bản ghi thêm sau mốc không chen vào các trang đang tải. Upsert giữ rowid kết quả cũ. Response chỉ gồm tóm tắt; fleets/shot log đi qua endpoint chi tiết có kiểm tra đấu thủ.
+Lịch sử dùng MySQL với chỉ mục theo player1/player2, `ended_at` và match_id. Cursor mang bộ lọc/tài khoản, mốc `seq` của trang đầu và khóa cuối; bản ghi thêm sau mốc không chen vào các trang đang tải. Upsert giữ nguyên `seq` của kết quả cũ. Response chỉ gồm tóm tắt; fleets/shot log đi qua endpoint chi tiết có kiểm tra đấu thủ.
 
 Mẫu tàu dùng Preferences, tối đa 5 ô cho mỗi SHA-256(endpoint + accountId); lưu bố trí của chính mình, không lưu credentials. FleetLayout kiểm tra và sao chép đầy đủ trước khi thay bàn đang sửa; server tiếp tục validate yêu cầu đặt tàu.
 

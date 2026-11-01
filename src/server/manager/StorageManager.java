@@ -9,11 +9,11 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.function.LongSupplier;
 
-/** SQLite transactions are the source of truth; legacy JSON is imported once. */
+/** MySQL transactions are the source of truth; legacy JSON is imported once. */
 public class StorageManager {
     private final Path directory;
     private final Path snapshot;
-    private SqliteStore database;
+    private MySqlStore database;
     private ResultJournal journal;
     private final Map<String, User> userByUsername = new LinkedHashMap<>();
     private final Map<Integer, User> userById = new LinkedHashMap<>();
@@ -29,7 +29,7 @@ public class StorageManager {
         this.directory = directory.toAbsolutePath(); this.snapshot = this.directory.resolve("snapshot.json");
         try {
             Files.createDirectories(this.directory);
-            database=new SqliteStore(this.directory.resolve("battleship.db"));
+            database=new MySqlStore(this.directory);
             if(database.initialized()) {
                 Map<String,Object> root=database.read();loadUsers(requiredList(root,"users"),false);loadMatches(requiredList(root,"matches"));
             } else if (Files.exists(snapshot)) {
@@ -53,7 +53,8 @@ public class StorageManager {
             }
             journal = new ResultJournal(this.directory.resolve("pending-results"));
             recoverPendingResults();
-        } catch (Exception e) { throw new IllegalStateException("Storage initialization failed; source files preserved: " + e.getMessage(), e); }
+        } catch (Exception e) { throw new IllegalStateException("Storage initialization failed (" + Database.describe(this.directory)
+                    + "); source files preserved. Kiểm tra MySQL đang chạy và db.properties: " + e.getMessage(), e); }
     }
     private void recoverPendingResults() throws IOException {
         for (Map<String,Object> payload : journal.pending()) {

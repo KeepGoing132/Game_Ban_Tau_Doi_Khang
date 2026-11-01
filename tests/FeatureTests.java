@@ -34,14 +34,14 @@ public final class FeatureTests {
             IntegrationTests.ok(player,new Message(MessageType.DELETE_ACCOUNT_REQ).put("password","secret").put("user_id",999));
             IntegrationTests.error(player,new Message(MessageType.CREATE_ROOM_REQ),"UNAUTHENTICATED");
             check(server.getStorage().findByUsername("training")==null,"delete logs out and removes username");
-            try(Connection c=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));PreparedStatement p=c.prepareStatement("SELECT username,password_hash,deleted FROM accounts WHERE user_id=?")) {
-                p.setInt(1,oldId);try(ResultSet r=p.executeQuery()){check(r.next()&&r.getBoolean(3)&&r.getString(2).isEmpty()&&!"training".equals(r.getString(1)),"SQL contains only anonymous tombstone, no credentials");}
+            try(Connection c=Db.open(dir);PreparedStatement p=c.prepareStatement("SELECT username,password_hash,deleted FROM accounts WHERE user_id=?")) {
+                p.setInt(1,oldId);try(ResultSet r=p.executeQuery()){check(r.next()&&r.getBoolean(3)&&r.getString(2).isEmpty()&&!"training".equals(r.getString(1)),"MySQL keeps only an anonymous tombstone, no credentials");}
             }
-            check(!new String(Files.readAllBytes(dir.resolve("battleship.db")),java.nio.charset.StandardCharsets.ISO_8859_1).contains(oldHash),"secure_delete removes old hash from freed SQLite pages");
+            check(!Db.storedTextContains(dir,oldHash),"the deleted credential is gone from every stored row");
             StorageManager restored=new StorageManager(dir);check(restored.findByUsername("training")==null,"deleted account stays deleted after restart");
             player.login("training");check(player.userId>oldId,"new account never inherits deleted stats or ID");
         }finally{server.stop();thread.join(5000);}
-        System.out.println("PASS features: SQLite migration, credential deletion/auth guards/restart, 3 bot levels over TCP, practice cleanup");
+        System.out.println("PASS features: MySQL storage, credential deletion/auth guards/restart, 3 bot levels over TCP, practice cleanup");
     }
     private static void databaseMigration()throws Exception {
         Path dir=DomainTests.empty("battleship-json-to-sql-");

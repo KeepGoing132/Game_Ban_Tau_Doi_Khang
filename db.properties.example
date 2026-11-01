@@ -1,0 +1,16 @@
+# Cấu hình MySQL cho server Battleship.
+#
+# Cách dùng: sao chép tệp này thành db.properties (cùng thư mục chạy lệnh, hoặc trong thư mục dữ
+# liệu), rồi sửa theo MySQL trên máy bạn. Tệp db.properties không được đưa lên git vì chứa mật khẩu.
+#
+# Cũng có thể ghi đè nhanh bằng tham số dòng lệnh, ví dụ:
+#   java -Dbattleship.db.host=127.0.0.1 -Dbattleship.db.password=... -cp bin server.ServerMain
+#
+# host, port, user, password : thông tin đăng nhập MySQL (mặc định 127.0.0.1:3306, root, rỗng)
+# name                       : tên schema muốn dùng cố định; bỏ trống thì suy ra từ thư mục dữ liệu
+# url                        : ghi đè toàn bộ JDBC URL nếu cần (khi đó name bị bỏ qua)
+
+host=127.0.0.1
+port=3306
+user=root
+password=CHANGE_ME

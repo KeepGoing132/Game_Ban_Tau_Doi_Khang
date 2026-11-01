@@ -29,14 +29,14 @@ public final class ChatSwingTests {
             SwingSmoke.waitFor(()->field(a,"loginFrame")!=null&&field(b,"loginFrame")!=null,"chat login windows");SwingSmoke.login(a,server.getPort(),"hai_dang");SwingSmoke.login(b,server.getPort(),"minh_anh");
             int aid=server.getStorage().findByUsername("hai_dang").getUserId(),bid=server.getStorage().findByUsername("minh_anh").getUserId();
             SwingSmoke.waitFor(()->((JTable)field(field(a,"lobbyFrame"),"tblOnlineUsers")).getRowCount()==1,"chat recipient in lobby");
-            try(Connection db=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));Statement s=db.createStatement()){s.execute("CREATE TRIGGER chat_ui_fail BEFORE INSERT ON chat_messages BEGIN SELECT RAISE(ABORT,'test write failure'); END");}
+            Db.breakChatWrites(dir,"chat_ui_fail");
             SwingSmoke.edt(()->{
                 Object lobby=field(a,"lobbyFrame");JTable users=(JTable)field(lobby,"tblOnlineUsers");users.setRowSelectionInterval(0,0);SwingSmoke.clickField(lobby,"btnChat");
                 check(panel(a).isExpanded(),"lobby message button opens chat");type(a,"Chào bạn! Mình làm một ván nhé? 🌊");
             });
             SwingSmoke.waitFor(()->((JLabel)field(panel(a),"status")).getText().contains("Chưa lưu"),"chat save error is visible");
             SwingSmoke.edt(()->{check(!input(a).getText().isEmpty()&&messageCount(a,bid)==0&&messageCount(b,aid)==0,"failed send keeps draft and is not displayed as delivered");check(((JButton)field(panel(a),"send")).isEnabled(),"failed send can be retried");});
-            try(Connection db=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));Statement s=db.createStatement()){s.execute("DROP TRIGGER chat_ui_fail");}
+            Db.restoreChatWrites(dir,"chat_ui_fail");
             SwingSmoke.edt(()->SwingSmoke.clickField(panel(a),"send"));
             SwingSmoke.waitFor(()->messageCount(a,bid)==1&&messageCount(b,aid)==1&&input(a).getText().isEmpty(),"enter sends and clears only after ack");
             SwingSmoke.edt(()->{

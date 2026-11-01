@@ -8,16 +8,18 @@ Repository: https://github.com/androoAGI/starnet
 
 StarNet có MIT License, copyright (c) 2026 Andrew Sims. Các tài nguyên bên thứ ba trong repo có điều khoản riêng tại NOTICE.md của nguồn. Bản LICENSE gốc được giữ trong clone.
 
-## SQLite JDBC
+## MySQL Connector/J
 
-Nguồn: https://github.com/xerial/sqlite-jdbc
+Nguồn: https://dev.mysql.com/doc/connector-j/en/ và https://github.com/mysql/mysql-connector-j
 
-Artifact: `org.xerial:sqlite-jdbc:3.53.4.0`, tải từ Maven Central. Thư viện chứa native SQLite cho Windows/macOS/Linux; không cần cài server database.
+Artifact: `com.mysql:mysql-connector-j:8.4.0`, tải từ Maven Central. Đây là driver JDBC dùng để nói chuyện với MySQL 8; server MySQL không được đóng gói kèm project, người chạy phải tự cài (xem mục **Chuẩn bị MySQL** trong README).
 
-SHA-256 của `lib/sqlite-jdbc-3.53.4.0.jar`, đã đối chiếu checksum Maven Central:
+SHA-256 của `lib/mysql-connector-j-8.4.0.jar`, đã đối chiếu checksum Maven Central:
 
 ```text
-bcb1f51e36f940867e83342f9efbf5968ac44a6bef4d397bb4af7b17b45cd2fb
+d77962877d010777cff997015da90ee689f0f4bb76848340e1488f2b83332af5
 ```
 
-License Apache 2.0 và BSD của mã gốc được trích nguyên văn từ JAR vào `lib/META-INF-maven-org.xerial-sqlite-jdbc-LICENSE` và `lib/META-INF-maven-org.xerial-sqlite-jdbc-LICENSE.zentus`. Giữ JAR và các license khi phân phối. Âm thanh của game được tổng hợp bằng mã nguồn tại máy, không dùng bản thu có bản quyền bên ngoài.
+License: **GNU General Public License v2 kèm Universal FOSS Exception v1.0** (POM của artifact ghi rõ tên này). Bản GPLv2 được kèm ở `lib/mysql-connector-j-LICENSE.txt`; giữ JAR và tệp license khi phân phối. Lưu ý giấy phép này khác SQLite (public domain) mà bản trước đây dùng, vì vậy nếu project được phát hành lại như sản phẩm nguồn mở cần đọc kỹ GPLv2.
+
+Âm thanh của game được tổng hợp bằng mã nguồn tại máy, không dùng bản thu có bản quyền bên ngoài.

@@ -9,3 +9,6 @@ data/pending-results/
 .idea/
 *.log
 *.bak
+
+# Cấu hình MySQL cục bộ (chứa mật khẩu), xem db.properties.example
+db.properties
