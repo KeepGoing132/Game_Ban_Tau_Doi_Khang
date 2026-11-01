@@ -28,4 +28,5 @@ try {
     Write-Host 'Build OK (Java 8 API compatibility).'
     Write-Host 'Portable JARs: dist/battleship-client.jar and dist/battleship-server.jar'
     exit 0
-} finally { Pop-Location }
+}
+finally { Pop-Location }
