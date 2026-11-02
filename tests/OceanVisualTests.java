@@ -251,13 +251,11 @@ public final class OceanVisualTests {
             for(int i=0;i<2;i++)check(replayDialog.myBoard().getCellState(myHits.get(i).getX(),myHits.get(i).getY())==BoardGridPanel.CellState.HIT,"replayed own chart shows the enemy hits");
             for(Ship ship:mine)for(Coordinate c:ship.getCoordinates())check(replayDialog.myBoard().getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"own fleet is drawn on the replayed chart");
             for(Coordinate c:theirs.get(4).getCoordinates())check(replayDialog.enemyBoard().getCellState(c.getX(),c.getY())==BoardGridPanel.CellState.SHIP,"untouched ships stay visible on the replayed chart");
+            check(SwingSmoke.button(replayDialog,"Phát lại")==null,"the record screen carries no playback controls");
             SwingSmoke.snapshot(replayDialog,dir.resolve("match-replay.png"));
             replayDialog.shots().setSelectedIndex(2);
-        });
-        SwingSmoke.edt(()->{
-            check(replayDialog.shots().getModel().getSize()==3,"picking a shot rewinds the replay to that point");
-            check(replayDialog.enemyBoard().getCellState(victim.get(3).getX(),victim.get(3).getY())==BoardGridPanel.CellState.SHIP,"later shots are removed when the replay is rewound");
-            SwingSmoke.snapshot(replayDialog,dir.resolve("match-replay-early.png"));
+            check(replayDialog.shots().getModel().getSize()==log.size(),"picking a row keeps the whole shot log on screen");
+            check(replayDialog.enemyBoard().getCellState(victim.get(3).getX(),victim.get(3).getY())==BoardGridPanel.CellState.SUNK,"picking a row leaves every shot on the chart");
             replayDialog.dispose();replayDialog=null;
         });
     }

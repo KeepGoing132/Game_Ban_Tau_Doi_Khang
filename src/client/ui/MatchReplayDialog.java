@@ -44,13 +44,6 @@ public class MatchReplayDialog extends JDialog {
     private final List<Ship> myShips, enemyShips;
     private final DefaultListModel<String> shotModel = new DefaultListModel<>();
     private final JList<String> shotList = new JList<>(shotModel);
-    private final JSlider slider = new JSlider(0, 1, 1);
-    private final JLabel lblStep = Theme.label(" ", Theme.FONT_BOLD, Theme.SEA_FOAM);
-    private final JButton btnPlay = Theme.button("Phát lại", true);
-    private final JButton btnHead = Theme.button("Về đầu", false);
-    private final JButton btnTail = Theme.button("Cuối", false);
-    private final Timer player;
-    private boolean updating;
 
     public MatchReplayDialog(Window parent, int myUserId, Map<String, Object> data) {
         super(parent, "Battleship • Hồi tượng trận đấu", ModalityType.MODELESS);
@@ -107,16 +100,9 @@ public class MatchReplayDialog extends JDialog {
         footer.add(close, BorderLayout.EAST);
         root.add(footer, BorderLayout.SOUTH);
 
-        player = new Timer(360, e -> stepForward());
-        player.setCoalesce(true);
-        slider.addChangeListener(e -> { if (!updating) show(slider.getValue()); });
-        btnPlay.addActionListener(e -> togglePlay());
-        btnHead.addActionListener(e -> { player.stop(); btnPlay.setText("Phát lại"); show(0); });
-        btnTail.addActionListener(e -> { player.stop(); btnPlay.setText("Phát lại"); show(shots.size()); });
         shotList.setCellRenderer(Theme.logRenderer());
-        shotList.addListSelectionListener(e -> { if (!e.getValueIsAdjusting() && !updating && shotList.getSelectedIndex() >= 0) { player.stop(); btnPlay.setText("Phát lại"); show(shotList.getSelectedIndex() + 1); } });
         getRootPane().registerKeyboardAction(e -> dispose(), KeyStroke.getKeyStroke("ESCAPE"), JComponent.WHEN_IN_FOCUSED_WINDOW);
-        show(shots.size());
+        render();
     }
 
     private JPanel chart(String title, BoardGridPanel board, String caption) {
@@ -141,53 +127,21 @@ public class MatchReplayDialog extends JDialog {
         shotList.setFixedCellHeight(26); shotList.setSelectionBackground(new Color(44, 120, 140, 150));
         JScrollPane scroll = Theme.scroll(shotList); Theme.transparentScroll(scroll);
         side.add(scroll, BorderLayout.CENTER);
-        JPanel controls = Theme.stack();
-        Theme.addStack(controls, lblStep, 10);
-        slider.setOpaque(false); slider.setForeground(Theme.PRIMARY); slider.setMaximumSize(new Dimension(Integer.MAX_VALUE, 28));
-        Theme.addStack(controls, slider, 10);
-        JPanel row = Theme.transparent(new GridLayout(1, 3, 8, 0));
-        row.add(btnHead); row.add(btnPlay); row.add(btnTail);
-        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
-        Theme.addStack(controls, row, 0);
-        side.add(controls, BorderLayout.SOUTH);
+        side.add(Theme.muted("Toàn bộ đường đạn của trận hiện sẵn trên hai hải phận."), BorderLayout.SOUTH);
         return side;
     }
 
-    private void togglePlay() {
-        if (player.isRunning()) { player.stop(); btnPlay.setText("Phát lại"); return; }
-        if (slider.getValue() >= shots.size()) show(0);
-        player.start(); btnPlay.setText("Tạm dừng");
-    }
-
-    private void stepForward() {
-        int next = slider.getValue() + 1;
-        if (next >= shots.size()) { show(shots.size()); player.stop(); btnPlay.setText("Phát lại"); return; }
-        show(next);
-    }
-
-    private void show(int count) {
-        int upTo = Math.max(0, Math.min(count, shots.size()));
-        updating = true;
-        slider.setValue(upTo);
-        shotModel.clear();
-        for (int i = 0; i < upTo; i++) shotModel.addElement(line(i));
-        if (upTo > 0) shotList.ensureIndexIsVisible(upTo - 1);
-        updating = false;
+    private void render() {
         myBoard.resetAllCells(); myBoard.setFleet(myShips);
         enemyBoard.resetAllCells(); enemyBoard.setFleet(enemyShips);
-        for (int i = 0; i < upTo; i++) {
+        for (int i = 0; i < shots.size(); i++) {
+            shotModel.addElement(line(i));
             Shot shot = shots.get(i);
             BoardGridPanel target = shot.mine ? enemyBoard : myBoard;
             if ("SUNK".equals(shot.result)) {
                 for (Coordinate cell : shot.sunk) target.setCellState(cell.getX(), cell.getY(), BoardGridPanel.CellState.SUNK);
                 target.setCellState(shot.x, shot.y, BoardGridPanel.CellState.SUNK);
             } else target.setCellState(shot.x, shot.y, "HIT".equals(shot.result) ? BoardGridPanel.CellState.HIT : BoardGridPanel.CellState.MISS);
-        }
-        if (upTo == 0) lblStep.setText("Chưa bắn phát nào. Nhấn Phát lại để xem toàn bộ đường đạn.");
-        else {
-            Shot last = shots.get(upTo - 1);
-            lblStep.setText(String.format(Locale.ROOT, "Phát %d / %d  •  %s  →  %s", upTo, shots.size(),
-                    last.mine ? "Bạn" : "Đối thủ", BoardGridPanel.coordinate(last.x, last.y)));
         }
     }
 
@@ -201,5 +155,4 @@ public class MatchReplayDialog extends JDialog {
     public JList<String> shots() { return shotList; }
     public BoardGridPanel myBoard() { return myBoard; }
     public BoardGridPanel enemyBoard() { return enemyBoard; }
-    @Override public void dispose() { if (player != null) player.stop(); super.dispose(); }
 }
