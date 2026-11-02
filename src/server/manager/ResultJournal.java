@@ -8,7 +8,7 @@ import java.security.*;
 import java.util.*;
 import java.util.stream.Stream;
 
-/** One synced, atomically published record per finished match, before MySQL is updated. */
+/** One synced, atomically published record per finished match, before SQLite is updated. */
 final class ResultJournal {
     private static final long MAX_BYTES = 64L * 1024 * 1024;
     private static final long MAX_RECORD_BYTES = 1024 * 1024;

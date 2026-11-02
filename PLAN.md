@@ -10,7 +10,7 @@ Ngày lập: **26/10/2026**. Trạng thái: **đã triển khai B0–B6; B7 đã
 2. **Dễ đọc:** giao diện, xử lý mạng, luật chơi và lưu dữ liệu có trách nhiệm rõ; dọn mã tách khỏi thay đổi hành vi.
 3. **Đáng tin cậy:** server quyết định trạng thái; lỗi có phản hồi; kết quả kiểm thử và giới hạn được ghi đúng thực tế.
 
-Giữ Java SE, Swing, TCP JSON UTF-8 theo dòng, MySQL (JDBC, driver trong `lib/`) và tương thích API Java 8. Giữ chức năng hiện có, dữ liệu thật, thay đổi đang làm và các báo cáo Word gốc. Không chuyển nền tảng, viết lại toàn bộ, tự commit/push hoặc thử nghiệm trên tài khoản thật.
+Giữ Java SE, Swing, TCP JSON UTF-8 theo dòng, SQLite và tương thích API Java 8. Giữ chức năng hiện có, dữ liệu thật, thay đổi đang làm và các báo cáo Word gốc. Không chuyển nền tảng, viết lại toàn bộ, tự commit/push hoặc thử nghiệm trên tài khoản thật.
 
 | Đã có trong mã nguồn | Việc cần hoàn thiện |
 | --- | --- |
@@ -19,7 +19,7 @@ Giữ Java SE, Swing, TCP JSON UTF-8 theo dòng, MySQL (JDBC, driver trong `lib/
 | Đặt tàu, xếp ngẫu nhiên, Ready/hủy Ready | Giới hạn thời gian chuẩn bị; lưu mẫu bố trí |
 | Chiến đấu, timer, xử lý thoát, hình phạt, chơi lại | Rà chuyển trạng thái và lỗi; hiển thị tình trạng kết nối |
 | Lịch sử, kết quả hai bàn cờ, phát lại trận | Phân trang, lọc và trạng thái tải/rỗng/lỗi |
-| MySQL, chống cộng điểm lặp, thử lưu lại kết quả lỗi | Phục hồi kết quả đã ghi bền vững vào hàng đợi chờ khi restart |
+| SQLite, chống cộng điểm lặp, thử lưu lại kết quả lỗi | Phục hồi kết quả đã ghi bền vững vào hàng đợi chờ khi restart |
 | Chat, cài đặt âm thanh/hiệu ứng, kiểm thử tự động | Giữ hoạt động xuyên suốt các luồng và kiểm thử lại bản cuối |
 
 “Đã có” không đồng nghĩa mọi kiểm thử hiện tại đều đạt. Bằng chứng các lần trước nằm trong TASKS_AND_MEMBERS.md và docs/UPGRADE_VERIFICATION.md.
@@ -156,7 +156,7 @@ Làm tuần tự **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7**. Chỉ 
 
 - [x] Giữ mặc định 20 trận/trang; thêm “Xem thêm”, lọc thắng/thua, đối thủ, khoảng ngày.
 - [x] Server lọc trước khi phân trang; sắp ổn định theo thời điểm kết thúc và match_id. Cursor có thứ tự tương ứng; đổi bộ lọc phải tải lại từ đầu, bỏ phản hồi cũ.
-- [x] Bổ sung bộ lọc, cursor, has_more vào giao thức, giữ giới hạn frame. Dùng truy vấn MySQL có tham số, tránh tải hết lịch sử chỉ để lấy một trang.
+- [x] Bổ sung bộ lọc, cursor, has_more vào giao thức, giữ giới hạn frame. Dùng truy vấn SQLite có tham số, tránh tải hết lịch sử chỉ để lấy một trang.
 - [x] Ghi rõ múi giờ/khoảng ngày hiển thị, chuyển thành khoảng thời gian gửi server nhất quán. Có trạng thái tải, rỗng, lỗi và thử lại.
 - [x] Giữ quyền xem replay chỉ cho đấu thủ; trận cũ thiếu replay vẫn có tóm tắt; xem lịch sử người khác không được mở chi tiết trái quyền.
 
@@ -169,7 +169,7 @@ Làm tuần tự **B0 → B1 → B2 → B3 → B4 → B5 → B6 → B7**. Chỉ 
 ### B6 — Bảo vệ kết quả khi lưu thất bại
 
 - [x] Thiết kế hàng đợi kết quả ghi bền vững trước khi áp dụng điểm, ví dụ journal ghi nối tiếp trong thư mục dữ liệu; bản ghi có phiên bản, match_id và đầy đủ kết quả.
-- [x] Luồng: ghi và đồng bộ journal xuống đĩa → commit điểm/lịch sử/hạn phạt trong MySQL → đánh dấu hoàn thành/dọn journal an toàn. Giữ chống lặp theo match_id.
+- [x] Luồng: ghi và đồng bộ journal xuống đĩa → commit điểm/lịch sử/hạn phạt trong SQLite → đánh dấu hoàn thành/dọn journal an toàn. Giữ chống lặp theo match_id.
 - [x] Restart đọc lại kết quả còn chờ; database đã có match_id thì không cộng lại. Nạp trạng thái chặn ghép còn chờ trước khi mở nhận người chơi.
 - [x] Journal ghi dở/hỏng được xử lý có kiểm soát, giữ bằng chứng và cảnh báo; không thay bằng dữ liệu mẫu. Không chứa mật khẩu hoặc phát board bí mật ra giao diện/log.
 - [x] Nếu cả journal và database không ghi được, báo chưa bảo đảm lưu, giữ thử lại trong RAM, không báo đã lưu. Không hứa phục hồi khi chưa ghi bền vững được ở đâu.
@@ -236,6 +236,6 @@ Khi được yêu cầu triển khai, bắt đầu ở bước chưa hoàn thàn
 
 Đã hoàn thiện mã client/server cho đổi mật khẩu; hạn đặt tàu 120 giây; 5 mẫu bố trí theo endpoint và ID; độ trễ heartbeat; lịch sử lọc/phân trang; journal phục hồi kết quả và thông báo điểm sau retry. ClientController chia luồng tài khoản/sảnh/đặt tàu/lịch sử/chiến đấu; các lớp điều phối chính được trình bày lại để theo dõi trạng thái.
 
-Kiểm thử tự động thường, timer thật 15 giây, Swing toàn luồng và nhóm giao diện mới đã PASS. Ca crash dùng tiến trình riêng ở hai ranh giới trước/sau MySQL commit; đã kiểm tra không cộng điểm lặp. JAR server chạy từ thư mục tạm, hai người đấu và đọc lịch sử; client nạp từ JAR độc lập đăng nhập thành công. Script Windows tự tìm Java hợp lệ, không phụ thuộc shim Oracle javapath.
+Kiểm thử tự động thường, timer thật 15 giây, Swing toàn luồng và nhóm giao diện mới đã PASS. Ca crash dùng tiến trình riêng ở hai ranh giới trước/sau SQLite commit; đã kiểm tra không cộng điểm lặp. JAR server chạy từ thư mục tạm, hai người đấu và đọc lịch sử; client nạp từ JAR độc lập đăng nhập thành công. Script Windows tự tìm Java hợp lệ, không phụ thuộc shim Oracle javapath.
 
 LAN hai máy vật lý, macOS thực tế và runtime Java 8: NOT-RUN. API Java 8 được kiểm tra khi biên dịch trên JDK 25.0.1. Soak test dài ngày và mất điện/hỏng đĩa chưa kiểm chứng; không suy ra từ localhost hoặc crash tiến trình.

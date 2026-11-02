@@ -111,7 +111,7 @@ turn_id bắt đầu 1, tăng sau từng phát bắn hợp lệ (kể cả HIT/S
 
 OVERLAP/OUT_OF_BOUNDS khi đặt tàu có message nêu ID tàu và ô lỗi. Invitation giả/đã dùng/sai receiver/hết hạn bị INVITE_EXPIRED. Lệnh trận cũ hoặc không có membership bị STALE_MATCH. Lỗi bắn không reset timer hoặc shot count. CHAT_MSG là event server gửi cho người nhận; client gửi bằng CHAT_SEND_REQ. OPPONENT_READY_NOTIFY giữ tên cũ; READY_STATE_NOTIFY thay event Ready cũ.
 
-## Chat riêng và lịch sử trên MySQL
+## Chat riêng và lịch sử SQLite
 
 Tất cả lệnh chat yêu cầu đăng nhập, dùng được trong sảnh, xếp tàu, trận đấu và thời gian phạt. Người gửi/đọc lịch sử luôn lấy từ socket đã xác thực; các trường giả `sender_id`/`user_id` từ client không thay đổi danh tính. Không broadcast nội dung chat ra sảnh. Lượt bắn và thời gian lượt không thay đổi khi gửi tin.
 
@@ -124,7 +124,7 @@ Tất cả lệnh chat yêu cầu đăng nhập, dùng được trong sảnh, x�
 
 Mỗi bản ghi `chat` gồm `message_id`, `sender_id`, `recipient_id`, `sender_name`, `recipient_name`, `body`, `sent_at_ms`, `client_message_id`. Nội dung tiếng Việt, emoji, xuống dòng được giữ dưới dạng văn bản thuần; bỏ khoảng trắng đầu/cuối. Không cho ký tự điều khiển ngoài tab/xuống dòng hoặc chuỗi surrogate hỏng. Giới hạn trang giữ frame UTF-8 dưới 64 KiB.
 
-Server commit MySQL trước khi phản hồi/phát event. Khóa unique `(sender_id, client_message_id)` chống tin trùng kể cả qua kết nối mới hoặc restart: retry cùng đích/nội dung trả lại cùng ID, không phát lại event; nội dung khác dùng cùng khóa bị `INVALID_MESSAGE`. Mất ACK có thể tra lại lịch sử. Người nhận offline đọc tin khi đăng nhập lại. Tối đa 10 lần gửi/5 giây/socket, vượt ngưỡng trả `CHAT_RATE_LIMIT`; tài khoản đích không tồn tại/đã xóa trả `USER_NOT_FOUND`; lỗi commit trả `STORAGE_ERROR` và không phát tin.
+Server commit SQLite trước khi phản hồi/phát event. Khóa unique `(sender_id, client_message_id)` chống tin trùng kể cả qua kết nối mới hoặc restart: retry cùng đích/nội dung trả lại cùng ID, không phát lại event; nội dung khác dùng cùng khóa bị `INVALID_MESSAGE`. Mất ACK có thể tra lại lịch sử. Người nhận offline đọc tin khi đăng nhập lại. Tối đa 10 lần gửi/5 giây/socket, vượt ngưỡng trả `CHAT_RATE_LIMIT`; tài khoản đích không tồn tại/đã xóa trả `USER_NOT_FOUND`; lỗi commit trả `STORAGE_ERROR` và không phát tin.
 
 Tin cũ với tài khoản đã xóa vẫn thuộc lịch sử của người còn lại, tên hiển thị “Tài khoản đã xóa” và không thể gửi thêm. Đăng ký lại cùng tên nhận ID mới, không thừa hưởng cuộc trò chuyện cũ.
 

@@ -17,7 +17,7 @@ public final class ChatManager {
         Map<String,Object> message=storage.saveChat(sender.getUser().getUserId(),target,(String)d.get("body"),(String)d.get("client_message_id"));
         boolean created=Boolean.TRUE.equals(message.remove("_created"));
         sender.reply(new Message(MessageType.CHAT_SEND_RESP).put("chat",message));
-        // Deliver only after MySQL commits. Retried sends never produce duplicate events.
+        // Deliver only after SQLite commits. Retried sends never produce duplicate events.
         ClientHandler recipient=users.getClientById(target);
         if(created && recipient!=null)recipient.sendMessage(new Message(MessageType.CHAT_MSG).put("chat",message));
         }

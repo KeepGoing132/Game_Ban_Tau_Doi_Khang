@@ -20,8 +20,6 @@ public final class PackageSmoke {
             TestRunner.check(jar.getEntry("client/ui/PasswordDialog.class")!=null && jar.getEntry("client/model/FleetPresets.class")!=null,"new client classes packaged");
             TestRunner.check(!jar.stream().anyMatch(e->e.getName().startsWith("data/")),"client JAR contains no user data");
         }
-        // the packaged server reads db.properties from its working directory (the data directory)
-        Files.write(data.resolve("db.properties"), server.manager.Database.effectiveProperties().getBytes(java.nio.charset.StandardCharsets.UTF_8));
         Process server=new ProcessBuilder(Paths.get(System.getProperty("java.home"),"bin","java").toString(),
                 "-Dfile.encoding=UTF-8","-Dbattleship.data_dir="+data,"-jar",serverJar.toString(),"0")
                 .directory(data.toFile()).redirectErrorStream(true).start();
@@ -66,7 +64,7 @@ public final class PackageSmoke {
                     for (Window w:Window.getWindows()) if (w.getClass().getClassLoader()==loader) w.dispose();
                 });
             }
-            System.out.println("PASS packaged JARs: external working directory, MySQL driver from dist/lib, two-player match/history, isolated client JAR login");
+            System.out.println("PASS packaged JARs: external working directory, SQLite library, two-player match/history, isolated client JAR login");
             System.out.println("Package test data: "+data);
         } finally {
             server.destroy(); if (!server.waitFor(5,TimeUnit.SECONDS)) server.destroyForcibly(); reader.join(1000);

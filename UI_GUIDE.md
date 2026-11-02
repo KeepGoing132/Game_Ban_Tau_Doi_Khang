@@ -24,7 +24,7 @@ Chọn một tài khoản ở sảnh rồi bấm **Nhắn tin**. Khung chat nổ
 
 Vào trận với người thật sẽ tự chọn đối thủ và thu gọn khung. Mở lại để trò chuyện trong lúc xếp tàu hoặc chiến đấu; bản đồ giữ nguyên kích thước. Khung chat đi theo cửa sổ khi thay đổi kích thước, giữ bản nháp và lịch sử khi chuyển giữa sảnh và trận. Danh sách có trạng thái online/offline; người đã có lịch sử vẫn có thể được nhắn khi offline.
 
-**Enter** gửi; **Shift+Enter** xuống dòng. Giới hạn 500 ký tự; không gửi rỗng. Phản hồi lỗi xuất hiện ngay dưới ô soạn, giữ bản nháp để gửi lại; di chuột lên thông báo để đọc đầy đủ. **Tin nhắn trước** tải thêm 20 tin mỗi lần. Đăng xuất xóa cache chat của phiên client, lịch sử vẫn được lưu trong MySQL trên server.
+**Enter** gửi; **Shift+Enter** xuống dòng. Giới hạn 500 ký tự; không gửi rỗng. Phản hồi lỗi xuất hiện ngay dưới ô soạn, giữ bản nháp để gửi lại; di chuột lên thông báo để đọc đầy đủ. **Tin nhắn trước** tải thêm 20 tin mỗi lần. Đăng xuất xóa cache chat của phiên client, lịch sử vẫn được lưu ở SQLite trên server.
 
 Ảnh: [sảnh có chat](docs/ui/chat-lobby.png), [chat trong trận](docs/ui/chat-battle.png), [thu gọn](docs/ui/chat-battle-collapsed.png), [cửa sổ nhỏ](docs/ui/chat-battle-small.png), [lịch sử](docs/ui/chat-history.png).
 
@@ -67,7 +67,7 @@ Cảnh biển được tối ưu để không tranh CPU với giao diện: khung
 
 ## Lịch sử đấu, xem lại trận và báo cáo sau trận
 
-**Lịch sử đấu.** Nút **03 Lịch sử đấu** ở cột bên trái của sảnh mở hồ sơ của chính bạn; chọn một chỉ huy trong danh sách trực tuyến rồi bấm **Lịch sử** để xem hồ sơ của người đó. Cửa sổ hiển thị điểm, số trận thắng và số trận đã đấu trên ba thẻ màu, kèm bảng 20 trận gần nhất: thời gian, đối thủ, kết quả **THẮNG** (xanh lá) hoặc **THUA** (đỏ san hô), điểm nhận, số phát bắn, thời lượng, lý do kết thúc (đánh chìm toàn bộ hạm đội, một bên rời trận, mất kết nối) và cột **Hải phận** (`Xem lại` hoặc `—`). Dữ liệu lấy từ bảng `matches` trong MySQL trên server qua `GET_MATCH_HISTORY_REQ`; client không tự tính kết quả.
+**Lịch sử đấu.** Nút **03 Lịch sử đấu** ở cột bên trái của sảnh mở hồ sơ của chính bạn; chọn một chỉ huy trong danh sách trực tuyến rồi bấm **Lịch sử** để xem hồ sơ của người đó. Cửa sổ hiển thị điểm, số trận thắng và số trận đã đấu trên ba thẻ màu, kèm bảng 20 trận gần nhất: thời gian, đối thủ, kết quả **THẮNG** (xanh lá) hoặc **THUA** (đỏ san hô), điểm nhận, số phát bắn, thời lượng, lý do kết thúc (đánh chìm toàn bộ hạm đội, một bên rời trận, mất kết nối) và cột **Hải phận** (`Xem lại` hoặc `—`). Dữ liệu lấy từ bảng `matches` trong SQLite trên server qua `GET_MATCH_HISTORY_REQ`; client không tự tính kết quả.
 
 **Xem lại một trận (hồi tượng).** Nhấn vào một dòng có `Xem lại` để mở màn hình hồi tượng: hai bàn cờ 10×10 cạnh nhau — **hải phận của bạn** (tàu của bạn cùng các phát bắn của đối thủ) và **hải phận đối thủ** (tàu đối thủ cùng các phát bắn của bạn) — kèm danh sách **đường đạn của trận đấu** theo đúng thứ tự bắn (mỗi dòng tô màu theo kết quả: trúng vàng, trượt xanh, chìm san hô). Thanh trượt và ba nút **Về đầu / Phát lại / Cuối** phát lại từng phát bắn; bấm một dòng trong danh sách để nhảy tới đúng phát đó, hai bàn cờ được dựng lại chính xác đến phát đang xem. Dữ liệu do server trả về qua `GET_MATCH_DETAIL_REQ`, chỉ cho hai đấu thủ của trận; trận cũ không có dữ liệu thì hiện dòng giải thích ngay dưới bảng thay vì gọi server.
 

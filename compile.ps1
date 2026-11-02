@@ -22,7 +22,7 @@ try {
     Copy-Item -Path lib/*.jar,lib/*LICENSE* -Destination dist/lib -Force
     Copy-Item -LiteralPath THIRD_PARTY_NOTICES.md -Destination dist -Force
     $serverManifest = Join-Path $env:TEMP ('battleship-manifest-' + [guid]::NewGuid() + '.mf')
-    [System.IO.File]::WriteAllText($serverManifest, "Main-Class: server.ServerMain`nClass-Path: lib/mysql-connector-j-8.4.0.jar`n`n", [System.Text.Encoding]::ASCII)
+    [System.IO.File]::WriteAllText($serverManifest, "Main-Class: server.ServerMain`nClass-Path: lib/sqlite-jdbc-3.53.4.0.jar`n`n", [System.Text.Encoding]::ASCII)
     & jar cfm dist/battleship-server.jar $serverManifest -C bin server -C bin common
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     Write-Host 'Build OK (Java 8 API compatibility).'

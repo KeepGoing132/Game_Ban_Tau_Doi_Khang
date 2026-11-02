@@ -4,7 +4,7 @@ Kế hoạch hoàn thiện hiện tại: [PLAN.md](PLAN.md) — luồng người
 
 Giao diện **Naval Command**: đăng nhập, phòng chỉ huy, bố trí hạm đội có xem trước, chiến đấu với nhật ký, màn hình kết quả WIN/LOSE mở ra hai hải phận, lịch sử đấu xem lại được từng trận, cửa sổ cài đặt âm lượng và bảng xếp hạng. Hai màn hình trong trận là cảnh biển động có hiệu ứng sóng quét khi vào trận. Xem [hướng dẫn giao diện và ảnh minh họa](UI_GUIDE.md).
 
-Game bắn tàu đối kháng dùng Java SE, Swing và TCP Socket. Server quản lý tài khoản, sảnh, bàn cờ bí mật, lượt bắn, điểm và lịch sử. Giữ stack Java Swing/TCP và nguồn Word của đồ án. Server lưu dữ liệu trong **MySQL** (driver `mysql-connector-j` được đóng gói trong `lib/`), nên cần một MySQL 8 chạy sẵn — xem [Chuẩn bị MySQL](#chuẩn-bị-mysql).
+Game bắn tàu đối kháng dùng Java SE, Swing và TCP Socket. Server quản lý tài khoản, sảnh, bàn cờ bí mật, lượt bắn, điểm và lịch sử. Giữ stack Java Swing/TCP và nguồn Word của đồ án. Server dùng SQLite JDBC được đóng gói trong `lib/`, không cần cài dịch vụ database riêng.
 
 ## Chuẩn bị Java trên Windows và macOS
 
@@ -18,23 +18,6 @@ javac -version
 ```
 
 Máy biên dịch cần JDK có `javac` và `jar`; máy chỉ chạy file JAR cần Java có hỗ trợ desktop. Không cần đổi sang JavaFX hoặc viết lại ứng dụng riêng cho Mac.
-
-## Chuẩn bị MySQL
-
-Server dùng **MySQL 8** (đã kiểm thử với MySQL 8.0.44 Community). Cài MySQL Server và để nó chạy ở `127.0.0.1:3306`, sau đó khai báo kết nối:
-
-```powershell
-# Trong thư mục project: sao chép mẫu rồi sửa host/user/password
-Copy-Item db.properties.example db.properties
-notepad db.properties
-```
-
-`db.properties` được tìm theo thứ tự: đường dẫn ghi trong `-Dbattleship.db.properties`, thư mục đang chạy lệnh, thư mục dữ liệu, rồi thư mục chứa JAR/`bin` — nên bản chạy bằng JAR chỉ cần đặt `db.properties` cạnh `battleship-server.jar`. Tệp này **không được đưa lên git** vì chứa mật khẩu. Cũng có thể ghi đè nhanh bằng tham số dòng lệnh, ví dụ `-Dbattleship.db.password=... -Dbattleship.db.host=192.168.1.10`.
-
-- Server **tự tạo schema** khi chạy lần đầu, không cần tạo bảng bằng tay. Tài khoản MySQL cần quyền tạo database và ghi bảng trong schema đó (`root` cho môi trường dev là đủ).
-- Schema suy ra từ thư mục dữ liệu: `data/` → `battleship`, thư mục khác → `battleship_<tên thư mục>` (tên dài được rút gọn kèm mã băm của đường dẫn). Đặt tên cố định bằng `name=` hoặc ghi đè toàn bộ URL bằng `url=` trong `db.properties`.
-- Mỗi thư mục dữ liệu là một schema riêng, nên có thể chạy nhiều server song song với các schema tách biệt. Kiểm tra dữ liệu bằng `SELECT * FROM battleship.accounts;` trong MySQL Workbench/`mysql` client.
-- Bộ kiểm thử cũng cần MySQL: mỗi ca test tạo schema tạm `battleship_battleship_*` và runner dọn các schema còn lại của lần chạy trước.
 
 ## Chạy trên Windows
 
@@ -100,7 +83,7 @@ dist/battleship-client.jar
 dist/battleship-server.jar
 ```
 
-Có thể biên dịch trên Windows rồi gửi chính các file này sang Mac; không cần biên dịch lại ở máy nhận. Gửi cả hai JAR **và thư mục `dist/lib/`** sang máy nhận. Server cần driver MySQL trong `dist/lib/` cạnh file JAR. Trong thư mục chứa hai JAR:
+Có thể biên dịch trên Windows rồi gửi chính các file này sang Mac; không cần biên dịch lại ở máy nhận. Gửi cả hai JAR **và thư mục `dist/lib/`** sang máy nhận. Server cần thư viện SQLite trong `lib/` cạnh file JAR. Trong thư mục chứa hai JAR:
 
 ```text
 java -Dfile.encoding=UTF-8 -jar battleship-server.jar 8888
@@ -112,7 +95,7 @@ Mở terminal khác tại cùng thư mục:
 java -Dfile.encoding=UTF-8 -jar battleship-client.jar
 ```
 
-Server lưu dữ liệu trong schema MySQL suy ra từ thư mục dữ liệu; thư mục `data/` (tương đối với thư mục chạy lệnh) chỉ còn giữ journal `pending-results/` và các file JSON cũ để nhập lần đầu. Bản JAR không chứa tài khoản, mật khẩu hoặc dữ liệu của project. Schema mới sẽ được tạo kèm dữ liệu mẫu; muốn chuyển điểm/lịch sử sang máy khác, dừng server rồi sao chép schema (`mysqldump battleship > battleship.sql`, nhập lại bằng `mysql < battleship.sql`) cùng thư mục `data/`. Chỉ chạy một server dùng mỗi schema.
+Server lưu `data/` bên trong thư mục đang chạy lệnh. Bản JAR không chứa tài khoản, mật khẩu hoặc dữ liệu của project. Thư mục mới sẽ có dữ liệu mẫu; muốn chuyển điểm/lịch sử hiện tại, dừng server rồi sao chép nguyên thư mục `data/` sang máy mới. Chỉ chạy một server dùng mỗi thư mục dữ liệu.
 
 ## Kiểm thử
 
@@ -153,13 +136,13 @@ Muốn quan sát HIT/SUNK nhanh, hai người có thể tự đặt tàu ngang l
 
 ## Dữ liệu và cấu hình
 
-Server lưu dữ liệu trong **MySQL** (schema suy ra từ thư mục dữ liệu: thư mục `data/` dùng schema `battleship`, thư mục khác dùng `battleship_<tên>`). Bảng `accounts` chứa username, mật khẩu băm PBKDF2-HMAC-SHA256 có salt/120000 vòng, điểm, thống kê và hạn phạt; `matches` chứa lịch sử (kèm cột `ended_at`/`winner_id` có chỉ mục và cột `payload` giữ JSON đầy đủ: kết quả, hai hạm đội niêm phong, nhật ký bắn); `chat_messages` chứa tin nhắn; `metadata` quản lý phiên bản schema. Một transaction ghi tài khoản và kết quả cùng nhau. Không lưu mật khẩu gốc trong database. Driver `mysql-connector-j-8.4.0.jar` nằm trong `lib/`; bản server JAR cần `dist/lib/` đi kèm.
+Server lưu database SQLite tại **`data/battleship.db`** (tương đối với thư mục chạy lệnh). `accounts` chứa username, mật khẩu băm PBKDF2-HMAC-SHA256 có salt/120000 vòng, điểm, thống kê và hạn phạt; `matches` chứa lịch sử; `metadata` quản lý phiên bản schema. Transaction ghi tài khoản và kết quả cùng nhau. Không lưu mật khẩu gốc trong database. JDBC 3.53.4.0 nằm trong `lib/`; bản server JAR cần `dist/lib/` đi kèm.
 
 Lần đầu, server tự nhập `snapshot.json` hiện có; nếu chưa có snapshot thì nhập `users.json`/`matches.json`. ID, mật khẩu băm, điểm, lịch sử và thời gian phạt được giữ. File nguồn cũ được giữ nguyên làm bản lưu trước chuyển đổi, có thể còn thông tin đăng nhập cũ; server chỉ đọc database sau khi nhập thành công, không đồng bộ ngược JSON. Không khôi phục JSON cũ đè lên database đang sử dụng. Chỉ chạy một server trên mỗi thư mục dữ liệu; dừng server trước khi sao lưu; sao chép cả `battleship.db` và thư mục `pending-results/` nếu còn kết quả chờ.
 
 Trong sảnh chọn **Tài khoản → Đổi mật khẩu** để nhập mật khẩu hiện tại, mật khẩu mới và xác nhận. Chỉ đổi khi rảnh ở sảnh (kể cả đang chờ hết phạt); không đổi khi tìm trận, ở phòng hoặc đang chơi. Đổi thành công giữ phiên hiện tại, ID, điểm, lịch sử và chat. Chọn **Tài khoản → Xóa tài khoản**, nhập lại mật khẩu và xác nhận để xóa tài khoản đang đăng nhập. Server chỉ cho xóa khi ở sảnh, kiểm tra mật khẩu và chờ các kết quả chưa lưu. Username/hash bị xóa khỏi database đang dùng; lịch sử trận giữ ID ẩn danh để không làm sai thống kê đối thủ. Người chơi bị đăng xuất; nếu tạo lại cùng tên thì là tài khoản mới, không nhận lại điểm/ID cũ. Các bản lưu JSON có trước chuyển đổi không được tự xóa.
 
-Rời trận online đang RUNNING bị trừ tối đa 3 điểm (không dưới 0) và cấm vào trận 60 giây. Đăng nhập/restart không xóa hạn phạt đã lưu. Trước khi cập nhật điểm, server đồng bộ kết quả vào journal `data/pending-results/`, rồi commit MySQL. Nếu transaction thất bại, điểm chưa đổi, người rời trận vẫn bị chặn; server thử lại mỗi giây và khi khởi động lại. Kết quả đã được ghi journal được phục hồi đúng một lần. Nếu journal cũng không ghi được thì kết quả chỉ còn trong RAM và chưa được bảo đảm qua crash; giao diện báo chờ lưu. Journal hỏng khiến khởi động thất bại có thông báo, giữ nguyên file để xử lý, không tự bỏ kết quả.
+Rời trận online đang RUNNING bị trừ tối đa 3 điểm (không dưới 0) và cấm vào trận 60 giây. Đăng nhập/restart không xóa hạn phạt đã lưu. Trước khi cập nhật điểm, server đồng bộ kết quả vào journal `data/pending-results/`, rồi commit SQLite. Nếu transaction thất bại, điểm chưa đổi, người rời trận vẫn bị chặn; server thử lại mỗi giây và khi khởi động lại. Kết quả đã được ghi journal được phục hồi đúng một lần. Nếu journal cũng không ghi được thì kết quả chỉ còn trong RAM và chưa được bảo đảm qua crash; giao diện báo chờ lưu. Journal hỏng khiến khởi động thất bại có thông báo, giữ nguyên file để xử lý, không tự bỏ kết quả.
 
 Có thể dùng dữ liệu riêng cho demo/test:
 
@@ -251,7 +234,7 @@ Kiểm thử riêng phần hoàn thiện: `powershell -NoProfile -ExecutionPolic
 
 Script Windows ưu tiên JAVA_HOME, sau đó Java trực tiếp trong PATH và các JDK cài ở Program Files. Các shim Oracle javapath được bỏ qua để tránh treo launcher; không thay cấu hình Java toàn máy.
 
-Sao lưu: dừng server, sao lưu schema MySQL (`mysqldump battleship > battleship.sql`) và sao chép thư mục dữ liệu gồm `pending-results/` (cùng các file JSON cũ nếu còn cần nhập lại); khôi phục cả hai cùng nhau rồi chỉ chạy một server. Journal giới hạn 64 MiB, mỗi kết quả tối đa 1 MiB; file được dọn sau commit. File `.tmp` chưa công bố được giữ để đối chiếu và báo trong log. Bảo đảm đã kiểm chứng là phục hồi sau crash tiến trình; chưa kiểm chứng mất điện đột ngột hoặc hỏng thiết bị lưu trữ.
+Sao lưu: dừng server, sao chép nguyên thư mục dữ liệu gồm database và `pending-results/`, khôi phục cùng nhau vào thư mục riêng rồi chỉ chạy một server. Journal giới hạn 64 MiB, mỗi kết quả tối đa 1 MiB; file được dọn sau commit. File `.tmp` chưa công bố được giữ để đối chiếu và báo trong log. Bảo đảm đã kiểm chứng là phục hồi sau crash tiến trình; chưa kiểm chứng mất điện đột ngột hoặc hỏng thiết bị lưu trữ.
 
 
 Sau khi build, kiểm tra bản JAR bằng `powershell -NoProfile -ExecutionPolicy Bypass -File .\run_tests.ps1 -Package -RealTimer`. Lệnh này chạy server JAR từ thư mục tạm và client từ JAR độc lập; không dùng dữ liệu thật. Bằng chứng nghiệm thu ngày 26/10 nằm trong TASKS_AND_MEMBERS.md; LAN hai máy, macOS và runtime Java 8 vẫn NOT-RUN.

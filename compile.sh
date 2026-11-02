@@ -30,7 +30,7 @@ mkdir -p dist/lib
 cp lib/*.jar lib/*LICENSE* dist/lib/
 cp THIRD_PARTY_NOTICES.md dist/
 manifest=$(mktemp)
-printf 'Main-Class: server.ServerMain\nClass-Path: lib/mysql-connector-j-8.4.0.jar\n\n' > "$manifest"
+printf 'Main-Class: server.ServerMain\nClass-Path: lib/sqlite-jdbc-3.53.4.0.jar\n\n' > "$manifest"
 "$BATTLESHIP_JAR" cfm dist/battleship-server.jar "$manifest" -C bin server -C bin common
 rm -f "$manifest"
 printf '%s\n' 'Build OK (Java 8 API compatibility).' 'Portable JARs: dist/battleship-client.jar and dist/battleship-server.jar'
