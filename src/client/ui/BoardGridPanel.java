@@ -11,11 +11,6 @@ import java.awt.geom.*;
 import java.awt.image.BufferedImage;
 import java.util.List;
 
-/**
- * The 10x10 battle grid, drawn as a pool of sea water: translucent glass tiles float over an
- * animated body of water with light caustics and a sweeping sonar, while fresh impacts leave
- * splashes and wreck bubbles behind. Interaction contract is unchanged.
- */
 public class BoardGridPanel extends Theme.RoundedPanel {
     public enum CellState {
         WATER, SHIP, HIT, MISS, SUNK, PREVIEW_VALID, PREVIEW_INVALID
@@ -34,7 +29,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
 
     private final JButton[][] cellButtons = new JButton[SIZE][SIZE];
     private final CellState[][] cellStates = new CellState[SIZE][SIZE];
-    /** When each cell last changed to a splash/sink state, for the one-shot impact animations. */
     private final long[][] stateChangedNanos = new long[SIZE][SIZE];
     private final Ship[][] fleetCells = new Ship[SIZE][SIZE];
     private final JLabel titleLabel;
@@ -47,7 +41,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
     private Coordinate selectedCoordinate;
     private boolean interactionEnabled;
     private boolean compact;
-    /** Whole static look of the board is baked once per size; only water motion is repainted. */
     private BufferedImage boardLayer;
     private BufferedImage waterTile;
     private int layerWidth;
@@ -90,7 +83,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         add(statusLabel, BorderLayout.SOUTH);
     }
 
-    /** Builds one cell: its states, its tooltip and, on interactive boards, its input handling. */
     private JButton cell(final int x, final int y, boolean interactive) {
         cellStates[x][y] = CellState.WATER;
         JButton button = new CellButton(x, y);
@@ -130,7 +122,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         return button;
     }
 
-    /** Arrow keys walk the grid; ENTER fires, so the board is usable without a mouse. */
     private void bindArrows(JButton button, final int x, final int y) {
         String[] keys = {"LEFT", "RIGHT", "UP", "DOWN"};
         int[][] delta = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -148,7 +139,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
     }
 
-    /** Keeps the grid square and centred, whatever space the layout gives the board. */
     private JPanel squareHost() {
         JPanel host = Theme.transparent(null);
         host.setLayout(new LayoutManager() {
@@ -206,7 +196,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         repaint();
     }
 
-    /** Publishes the enemy fleet after the match: untouched water becomes ship, impact marks stay. */
     public void revealFleet(List<Ship> fleet) {
         if (fleet == null) {
             return;
@@ -231,7 +220,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         repaint();
     }
 
-    /** Copies the visible marks of another board, for the after-action report. */
     public void mirrorStates(BoardGridPanel source) {
         if (source == null) {
             return;
@@ -325,9 +313,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
     }
 
-    // ------------------------------------------------------------------ painting
-
-    /** Glass deck, water body and the static chart marks, baked once; only motion is repainted. */
     @Override
     protected void paintComponent(Graphics graphics) {
         int w = getWidth(), h = getHeight();
@@ -342,7 +327,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             g.drawImage(layer, 0, 0, w, h, null);
         }
         double t = OceanScene.isAnimated() ? OceanScene.time() : 0;
-        // a rectangular clip stays inside the rounded corners and costs nothing to rasterise
         g.clipRect(6, 6, w - 12, h - 12);
         for (int i = 0; i < 3; i++) {
             OceanScene.paintWaveRule(g, 4, (int) (h * (0.26 + i * 0.24)), w - 8, t * (1 + i * 0.35) + i * 2, Theme.SEA_FOAM, compact ? .08 : .16);
@@ -357,7 +341,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             return boardLayer;
         }
         long now = System.nanoTime();
-        // a resize storm must not rebake the layer on every intermediate size
         if (boardLayer != null && (now - layerBuiltNanos) / 1000000L < 140) {
             return boardLayer;
         }
@@ -373,7 +356,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         g.setColor(new Color(Theme.SEA_HORIZON.getRed(), Theme.SEA_HORIZON.getGreen(), Theme.SEA_HORIZON.getBlue(), 78));
         g.drawRoundRect(0, 0, w - 1, h - 1, 20, 20);
         g.clip(new RoundRectangle2D.Double(1, 1, w - 2, h - 2, 19, 19));
-        // water: turquoise above the midline, then violet-tinted deep
         g.setPaint(new GradientPaint(0, 0, new Color(36, 172, 188, 204), 0, h * 0.55f, new Color(22, 104, 168, 214)));
         g.fillRect(1, 1, w - 2, h - 2);
         g.setPaint(new GradientPaint(0, h * 0.55f, new Color(22, 104, 168, 214), 0, h, new Color(24, 34, 96, 226)));
@@ -387,7 +369,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         return boardLayer = image;
     }
 
-    /** Faint chart contours so the water reads as a nautical map rather than a flat gradient. */
     private void paintDepthContours(Graphics2D g, int w, int h, double t) {
         g.setStroke(new BasicStroke(1f));
         g.setColor(new Color(156, 224, 244, 26));
@@ -397,7 +378,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
     }
 
-    /** Splashes and wreck bubbles that sit above the tiles. */
     @Override
     protected void paintChildren(Graphics graphics) {
         super.paintChildren(graphics);
@@ -443,7 +423,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         g.dispose();
     }
 
-    /** A single tile, drawn by hand: the button UI and the border passes are skipped on purpose. */
     private class CellButton extends JButton {
         private final int x;
         private final int y;
@@ -481,7 +460,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             paintMarks(g, state, w, h, cx, cy, selected);
         }
 
-        /** Water keeps its glass tile; any other state is a coloured slab with an inner line. */
         private void paintTileBackground(Graphics2D g, CellState state, int w, int h) {
             Color fill = null;
             switch (state) {
@@ -528,7 +506,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             }
         }
 
-        /** Hull silhouette: the bow and stern cells get the pointed ends, middle cells the deck. */
         private void paintShip(Graphics2D g, int w, int h, int cx, int cy) {
             Ship ship = fleetCells[x][y];
             g.setColor(new Color(216, 226, 255, 235));
@@ -549,7 +526,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             int position = horizontal ? x : y;
             boolean rotated = !horizontal;
             if (rotated) {
-                // a vertical ship is drawn as a rotated horizontal one, so the shape is identical
                 g.translate(w, 0);
                 g.rotate(Math.PI / 2);
                 int swap = w;
@@ -580,7 +556,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             }
         }
 
-        /** Hit cross, miss splashes, invalid preview and the selection ring. */
         private void paintMarks(Graphics2D g, CellState state, int w, int h, int cx, int cy, boolean selected) {
             if (state == CellState.HIT || state == CellState.SUNK) {
                 g.setColor(Theme.DANGER);
@@ -620,7 +595,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
     }
 
-    /** Glass tile with a wet hint; every cell of a board shares one size, so one tile is cached. */
     private BufferedImage waterTile(int w, int h) {
         if (waterTile != null && tileWidth == w && tileHeight == h) {
             return waterTile;

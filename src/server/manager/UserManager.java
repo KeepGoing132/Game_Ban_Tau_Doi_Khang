@@ -133,24 +133,15 @@ public class UserManager {
         return list;
     }
 
-    /**
-     * Bảng xếp hạng sắp xếp theo 3 tiêu chí:
-     * 1. Tổng số điểm giảm dần
-     * 2. Tổng số trận thắng giảm dần
-     * 3. Tỷ lệ thắng (Win Rate) giảm dần
-     */
     public List<Map<String, Object>> getLeaderboard() {
         List<User> allUsers = storageManager.getAllUsers();
         allUsers.sort((a, b) -> {
-            // Tiêu chí 1: Điểm giảm dần
             if (b.getTotalPoints() != a.getTotalPoints()) {
                 return Integer.compare(b.getTotalPoints(), a.getTotalPoints());
             }
-            // Tiêu chí 2: Số trận thắng giảm dần
             if (b.getTotalWins() != a.getTotalWins()) {
                 return Integer.compare(b.getTotalWins(), a.getTotalWins());
             }
-            // Tiêu chí 3: Tỷ lệ thắng giảm dần
             int rate = Double.compare(b.getTotalGames()==0?0:(double)b.getTotalWins()/b.getTotalGames(), a.getTotalGames()==0?0:(double)a.getTotalWins()/a.getTotalGames());
             if (rate != 0) return rate;
             int name = a.getUsername().compareTo(b.getUsername());
@@ -178,10 +169,6 @@ public class UserManager {
         return activeClients.get(userId);
     }
 
-    /**
-     * Match history of one account, newest first. Only public result data leaves the server:
-     * who played, who won, the reason, shots, duration and the points each side got.
-     */
     public Map<String, Object> matchHistory(ClientHandler requester, int targetUserId, int limit) {
         Map<String,Object> data=new LinkedHashMap<>(); data.put("target_user_id",targetUserId); data.put("limit",limit);
         return matchHistory(requester,data);
@@ -231,11 +218,6 @@ public class UserManager {
         }
     }
 
-    /**
-     * One match of the requester's own history with both sealed fleets and the ordered shot log,
-     * so the client can rebuild the two boards exactly as the match ended. Fleets are released
-     * only to the two players of that match, and only after the match is over.
-     */
     public Map<String, Object> matchDetail(ClientHandler requester, String matchId) {
         User viewer = requester == null ? null : requester.getUser();
         if (viewer == null) throw new DomainException("UNAUTHENTICATED", "Hãy đăng nhập lại");

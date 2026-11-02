@@ -14,15 +14,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Replay of one finished match, opened from the player's own history: both sealed fleets on two
- * charts plus the ordered shot log, which can be played back shot by shot. The data is served by
- * the server only to the two players of that match, and only after the match is over.
- */
 public class MatchReplayDialog extends JDialog {
     private static final SimpleDateFormat WHEN = new SimpleDateFormat("dd/MM/yyyy HH:mm");
 
-    /** One accepted shot of the stored log, already oriented to the requested player. */
     private static final class Shot {
         final int turn, x, y;
         final String result;
@@ -171,7 +165,6 @@ public class MatchReplayDialog extends JDialog {
         show(next);
     }
 
-    /** Rebuilds both charts up to the given shot index, so the replay is always consistent. */
     private void show(int count) {
         int upTo = Math.max(0, Math.min(count, shots.size()));
         updating = true;
@@ -205,7 +198,6 @@ public class MatchReplayDialog extends JDialog {
                 BoardGridPanel.coordinate(shot.x, shot.y), outcome);
     }
 
-    /** Rows currently listed; used by the GUI tests. */
     public JList<String> shots() { return shotList; }
     public BoardGridPanel myBoard() { return myBoard; }
     public BoardGridPanel enemyBoard() { return enemyBoard; }

@@ -116,7 +116,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
     private String opponentName = "";
     private List<Ship> myShips = new ArrayList<>();
 
-    /** History and replay screens of the lobby, kept so they are closed with the session. */
     private MatchHistoryDialog historyDialog;
     private MatchReplayDialog replayDialog;
     private String pendingHistoryRequest;
@@ -192,7 +191,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         send(new Message(MessageType.GET_LEADERBOARD_REQ));
     }
 
-    /** targetUserId 0 asks for the logged-in player's own history. */
     public void requestMatchHistory(int targetUserId) {
         if (currentUser == null) return;
         if (historyDialog != null) historyDialog.dispose();
@@ -215,14 +213,12 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         send(request);
     }
 
-    /** Full replay of one match of the player's own history: both fleets plus the shot log. */
     public void requestMatchDetail(String matchId) {
         Message msg = new Message(MessageType.GET_MATCH_DETAIL_REQ);
         msg.put("match_id", matchId);
         send(msg);
     }
 
-    /** The window a lobby-owned dialog should be attached to. */
     private Window dialogParent() {
         if (lobbyFrame != null && lobbyFrame.isVisible()) return lobbyFrame;
         return gameWindow;
@@ -254,17 +250,12 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
 
     public void sendReady(List<Ship> ships) {
         this.myShips = ships;
-        // Gửi danh sách 5 tàu lên Server thẩm định
         Message placeMsg = new Message(MessageType.PLACE_SHIPS_REQ);
         placeMsg.put("ships", common.model.FleetLayout.encode(ships));
         pendingPlacement=UUID.randomUUID().toString();
         placeMsg.requestId(pendingPlacement);
         send(placeMsg);
-        // Ready follows the server acknowledgment of this submission.
     }
-    // ==========================================
-    // SERVER LISTENER CALLBACKS
-    // ==========================================
     @Override
     public void onConnected() {
     }
@@ -411,7 +402,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         updateConnectionStatus();
     }
 
-    /** Account events, after session/request validation in handleMessage. */
     private void handleAccountMessage(Message msg) {
         String incoming = JsonUtil.getString(msg.getData(), "match_id", null);
         switch (msg.getType()) {
@@ -463,7 +453,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         }
     }
 
-    /** Lobby events, after session/request validation in handleMessage. */
     private void handleLobbyMessage(Message msg) {
         String incoming = JsonUtil.getString(msg.getData(), "match_id", null);
         switch (msg.getType()) {
@@ -612,7 +601,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         }
     }
 
-    /** Placement events, after session/request validation in handleMessage. */
     private void handlePlacementMessage(Message msg) {
         String incoming = JsonUtil.getString(msg.getData(), "match_id", null);
         switch (msg.getType()) {
@@ -635,7 +623,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         }
     }
 
-    /** History events, after session/request validation in handleMessage. */
     private void handleHistoryMessage(Message msg) {
         String incoming = JsonUtil.getString(msg.getData(), "match_id", null);
         switch (msg.getType()) {
@@ -665,7 +652,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         }
     }
 
-    /** Battle events, after session/request validation in handleMessage. */
     private void handleBattleMessage(Message msg) {
         String incoming = JsonUtil.getString(msg.getData(), "match_id", null);
         switch (msg.getType()) {
@@ -737,7 +723,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
                 boolean iWon = (winnerId == currentUser.getUserId());
                 screen = Screen.RESULT;
                 String reason = JsonUtil.getString(msg.getData(), "reason", "");
-                // Cập nhật lại điểm của currentUser
                 Map<String, Object> scores = JsonUtil.getMap(msg.getData(), "scores");
                 int awardedPts = iWon ? 3 : 0;
                 if (scores != null) {
@@ -787,10 +772,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         }
     }
 
-    /**
-    * Reads the fleet layout used by PLACE_SHIPS_REQ and by MATCH_END once the match is over:
-    * {@code [{id, size, coordinates:[{x,y}]}]}. Shared with the replay screen of the history.
-    */
     public static List<Ship> parseFleet(List<Object> raw) {
         if (raw == null) return null;
         List<Ship> fleet = new ArrayList<>();
@@ -868,9 +849,6 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         gameWindow.repaint();
         battlePanel.setTurn(firstTurnPlayerId == currentUser.getUserId(), timeLimitSec);
     }
-    // ==========================================
-    // BATTLE ACTION LISTENER IMPLEMENTATION
-    // ==========================================
     @Override
     public void onFire(int x, int y) {
         Message msg = new Message(MessageType.FIRE_REQ);

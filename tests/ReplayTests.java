@@ -10,15 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-/**
- * Match replay: the sealed fleets and the ordered shot log are stored with the result, survive a
- * server restart, and are served only to the two players of that match. Records written before the
- * feature stay readable and simply report that no replay exists.
- */
 public final class ReplayTests {
     private static void check(boolean condition, String message) { TestRunner.check(condition, message); }
 
-    /** Two different layouts, so "my fleet" and "the enemy fleet" can be told apart. */
     private static List<Map<String, Object>> fleet(boolean vertical) {
         List<Map<String, Object>> list = new ArrayList<>();
         int[] sizes = {5, 4, 3, 3, 2};
@@ -55,7 +49,6 @@ public final class ReplayTests {
             shots = 0;
             int[] sizes = {5, 4, 3, 3, 2};
             for (int i = 0; i < sizes.length; i++) for (int n = 0; n < sizes[i]; n++) {
-                // the target of b is laid out vertically, the target of a horizontally
                 int x = target == a ? n : i, y = target == a ? i : n;
                 Message result = IntegrationTests.ok(shooter, IntegrationTests.match(MessageType.FIRE_REQ, matchId).put("turn_id", turn).put("x", x).put("y", y));
                 shots++;
@@ -66,7 +59,6 @@ public final class ReplayTests {
             Message ended = shooter.waitType(MessageType.MATCH_END); target.waitType(MessageType.MATCH_END);
             check(JsonUtil.requireInt(ended.getData(), "winner_id") == shooter.userId, "shooter wins the replay match");
 
-            // history flags the row as replayable
             Message history = IntegrationTests.ok(a, new Message(MessageType.GET_MATCH_HISTORY_REQ));
             List<Object> rows = JsonUtil.getList(history.getData(), "matches");
             check(rows != null && rows.size() == 1, "one finished match in the history");
@@ -74,7 +66,6 @@ public final class ReplayTests {
             check(JsonUtil.getBoolean(row, "replay", false), "history marks the match as replayable");
             check(matchId.equals(row.get("match_id")), "history points at the finished match");
 
-            // the winner gets its own fleet first and the enemy fleet second, with the whole log
             Message detail = IntegrationTests.ok(shooter, new Message(MessageType.GET_MATCH_DETAIL_REQ).put("match_id", matchId));
             check(JsonUtil.getBoolean(detail.getData(), "replay_available", false), "replay is available");
             List<Object> mine = JsonUtil.getList(detail.getData(), "my_ships"), theirs = JsonUtil.getList(detail.getData(), "opponent_ships");
@@ -101,12 +92,10 @@ public final class ReplayTests {
             check(mineShots == JsonUtil.requireInt(detail.getData(), "my_shots"), "shot log agrees with the shooter's shot count");
             check(shots - mineShots == JsonUtil.requireInt(detail.getData(), "opponent_shots"), "the other side is counted as the opponent");
 
-            // the same match seen by the loser is mirrored, not copied
             Message mirror = IntegrationTests.ok(target, new Message(MessageType.GET_MATCH_DETAIL_REQ).put("match_id", matchId));
             check(!JsonUtil.getBoolean(mirror.getData(), "won", true), "the loser sees the loss");
             check(sameShape(JsonUtil.getList(mirror.getData(), "my_ships"), target == a), "the other player sees its own fleet first");
 
-            // fleets are released only to the two players of that match
             IntegrationTests.error(c, new Message(MessageType.GET_MATCH_DETAIL_REQ).put("match_id", matchId), "FORBIDDEN");
             IntegrationTests.error(a, new Message(MessageType.GET_MATCH_DETAIL_REQ).put("match_id", "M_nope"), "MATCH_NOT_FOUND");
             IntegrationTests.error(a, new Message(MessageType.GET_MATCH_DETAIL_REQ).put("match_id", ""), "INVALID_MESSAGE");
@@ -121,7 +110,6 @@ public final class ReplayTests {
         System.out.println("PASS replay: sealed fleets + shot log stored, mirrored per player, restart-safe, participants only, legacy rows still readable");
     }
 
-    /** A record written before the feature: it must load, list, and report that it cannot be replayed. */
     private static void legacy() throws Exception {
         Path dir = Files.createTempDirectory("battleship-replay-legacy-");
         String hash = PasswordHasher.hash("secret");
@@ -168,7 +156,6 @@ public final class ReplayTests {
         return total;
     }
 
-    /** True when the first ship runs along the bottom row, i.e. the horizontal layout. */
     private static boolean sameShape(List<Object> fleet, boolean horizontal) {
         if (fleet == null || fleet.isEmpty()) return false;
         @SuppressWarnings("unchecked") Map<String, Object> first = (Map<String, Object>) fleet.get(0);

@@ -4,11 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.*;
 
-/**
- * Small animated sea props placed inside the match screens: a compass rose, a surface-search
- * sonar scope, an animated water rule, a horizon strip and a depth gauge. They read the shared
- * {@link OceanScene} clock, so they cost nothing extra: the screen timer already repaints them.
- */
 public class SeaDecor extends JPanel {
     public enum Kind { COMPASS, SONAR, WAVES, HORIZON, DEPTH }
     private final Kind kind;
@@ -64,7 +59,6 @@ public class SeaDecor extends JPanel {
         }
         g.dispose();
     }
-    /** Vertical soundings: tick marks every 10 fathoms plus a wandering lead line. */
     private void paintDepth(Graphics2D g, int w, int h, double t) {
         int ticks = 9, x = Math.min(14, w / 2);
         g.setColor(new Color(126, 202, 226, 46));

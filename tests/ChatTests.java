@@ -39,26 +39,21 @@ public final class ChatTests {
             Message spoofed=ok(c,new Message(MessageType.CHAT_HISTORY_REQ).put("peer_id",bob).put("user_id",alice));check(rows(spoofed).isEmpty(),"history ignores forged owner ID");
             check(JsonUtil.getList(ok(c,new Message(MessageType.CHAT_CONVERSATIONS_REQ)).getData(),"conversations").isEmpty(),"conversation list is private");
             IntegrationTests.error(c,new Message(MessageType.CHAT_HISTORY_REQ).put("peer_id",bob).put("before_id",-1),"INVALID_MESSAGE");
-            // A persistence failure must not acknowledge or deliver a message.
             try(Connection db=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));Statement s=db.createStatement()){s.execute("CREATE TRIGGER chat_fail BEFORE INSERT ON chat_messages BEGIN SELECT RAISE(ABORT,'test disk failure'); END");}
             IntegrationTests.error(b,send(alice,"fail-save","fail-save"),"STORAGE_ERROR");noChat(a);
             try(Connection db=DriverManager.getConnection("jdbc:sqlite:"+dir.resolve("battleship.db"));Statement s=db.createStatement()){s.execute("DROP TRIGGER chat_fail");}
             ok(b,send(alice,"Đã lưu thành công","saved-2"));a.waitType(MessageType.CHAT_MSG);
-            // Both players can chat during placement and RUNNING without advancing a turn.
             String match=IntegrationTests.queuePair(a,b);ok(a,send(bob,"Sẵn sàng chưa?","placing"));b.waitType(MessageType.CHAT_MSG);
             IntegrationTests.ok(a,IntegrationTests.match(MessageType.PLACE_SHIPS_REQ,match).put("ships",IntegrationTests.fleet()));IntegrationTests.ok(b,IntegrationTests.match(MessageType.PLACE_SHIPS_REQ,match).put("ships",IntegrationTests.fleet()));
             IntegrationTests.ok(a,IntegrationTests.ready(match,true));IntegrationTests.ok(b,IntegrationTests.ready(match,true));a.waitType(MessageType.MATCH_START);b.waitType(MessageType.MATCH_START);
             ok(b,send(alice,"Chúc may mắn!","battle"));a.waitType(MessageType.CHAT_MSG);
-            // Logout third account: sending offline is durable, not a global broadcast.
             ok(c,new Message(MessageType.LOGOUT_REQ));ok(b,send(third,"Khi nào online thì chơi nhé","offline"));c.login("chat_charlie");check(rows(history(c,bob,0)).size()==1,"offline recipient retrieves message on next login");
             for(int i=0;i<27;i++)server.getStorage().saveChat(alice,bob,String.join("",Collections.nCopies(500,"ệ")),"page-"+i);
             Message page=history(b,alice,0);check(rows(page).size()==20&&JsonUtil.getBoolean(page.getData(),"has_more",false),"history is paginated");check(page.toJson().getBytes("UTF-8").length<common.config.GameConfig.MAX_FRAME_BYTES,"maximum Unicode page fits TCP frame");
             @SuppressWarnings("unchecked") Map<String,Object> oldest=(Map<String,Object>)rows(page).get(0);Message earlier=history(b,alice,JsonUtil.getLong(oldest,"message_id",0));check(rows(earlier).size()==11&&!JsonUtil.getBoolean(earlier.getData(),"has_more",true),"older page covers remainder without overlap");
             Set<Long> ids=new HashSet<>();for(Object o:rows(page)){@SuppressWarnings("unchecked") Map<String,Object> row=(Map<String,Object>)o;check(ids.add(JsonUtil.getLong(row,"message_id",0)),"unique page IDs");}for(Object o:rows(earlier)){@SuppressWarnings("unchecked") Map<String,Object> row=(Map<String,Object>)o;check(ids.add(JsonUtil.getLong(row,"message_id",0)),"no page overlap");}
-            // Rate limiting is scoped to sender; reads continue to work.
             boolean limited=false;for(int i=0;i<12;i++){Message r=c.request(send(bob,"ping","rate-"+i));if("CHAT_RATE_LIMIT".equals(r.getErrorCode()))limited=true;}check(limited,"burst flood rejected");history(c,bob,0);
         }finally{server.stop();thread.join(5000);}
-        // Restart the actual server, not just an in-memory repository.
         GameServer restored=new GameServer(0,dir);Thread restoredThread=PenaltyTests.start(restored);
         try(SocketPeer a=new SocketPeer(restored.getPort(),true);SocketPeer b=new SocketPeer(restored.getPort(),true)) {
             a.login("chat_alice");b.login("chat_bob");check(rows(history(a,bob,0)).size()==20,"history survives server restart");

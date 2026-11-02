@@ -19,7 +19,6 @@ public class ServerMain {
 
         GameServer server = new GameServer(port);
 
-        // Đăng ký shutdown hook để dọn dẹp khi tắt server
         Runtime.getRuntime().addShutdownHook(new Thread(server::stop));
 
         server.start();

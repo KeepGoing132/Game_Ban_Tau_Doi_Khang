@@ -3,7 +3,6 @@ package common.model;
 import common.protocol.JsonUtil;
 import java.util.*;
 
-/** Validated, detached fleet layouts shared by local presets and placement requests. */
 public final class FleetLayout {
     private FleetLayout() {}
     public static List<Map<String,Object>> encode(List<Ship> ships) {

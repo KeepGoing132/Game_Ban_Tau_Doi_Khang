@@ -41,14 +41,6 @@ public class Board {
         return null;
     }
 
-    /**
-     * Thẩm định xem bố trí tàu có hợp lệ theo chuẩn bài tập lớn không:
-     * - Đúng 5 tàu
-     * - Kích thước bộ tàu đúng: 1 tàu 5 ô, 1 tàu 4 ô, 2 tàu 3 ô, 1 tàu 2 ô (tổng 17 ô)
-     * - Tọa độ 0..9
-     * - Tàu thẳng hàng (ngang hoặc dọc)
-     * - Không chồng lấn
-     */
     public boolean validateAllShips() {
         if (ships == null || ships.size() != 5) {
             return false;
@@ -67,19 +59,16 @@ public class Board {
             if (ship.getCoordinates().contains(null)) return false;
             actualSizes.add(ship.getSize());
 
-            // Kiểm tra tọa độ và tính thẳng hàng
             List<Coordinate> coords = ship.getCoordinates();
             if (!isValidShipGeometry(coords, ship.getSize())) {
                 return false;
             }
 
-            // Kiểm tra chồng lấn và biên
             for (Coordinate c : coords) {
                 if (c.getX() < 0 || c.getX() >= SIZE || c.getY() < 0 || c.getY() >= SIZE) {
                     return false;
                 }
                 if (!occupiedCells.add(c)) {
-                    // Trùng tọa độ ô khác
                     return false;
                 }
             }
@@ -130,10 +119,6 @@ public class Board {
         return true;
     }
 
-    /**
-     * Nhận 1 phát bắn vào tọa độ c.
-     * Trả về kết quả: MISS, HIT, hoặc SUNK.
-     */
     public ShotResult receiveShot(Coordinate c) {
         shotHistory.add(c);
         Ship hitShip = getShipAt(c);
@@ -148,9 +133,6 @@ public class Board {
         return ShotResult.HIT;
     }
 
-    /**
-     * Kiểm tra xem toàn bộ 5 tàu đã bị bắn chìm chưa
-     */
     public boolean areAllShipsSunk() {
         if (ships.isEmpty()) return false;
         for (Ship ship : ships) {

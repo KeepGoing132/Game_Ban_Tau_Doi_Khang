@@ -14,12 +14,10 @@ import java.lang.reflect.Field;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Uses real Swing components and real TCP; all component actions run on the EDT. */
 public class SwingSmoke {
     interface Checked { void run()throws Exception; }
     interface Condition { boolean ready()throws Exception; }
     static Object field(Object obj,String name)throws Exception {Field f=obj.getClass().getDeclaredField(name);f.setAccessible(true);return f.get(obj);}
-    /** The end screen of one client, reached through its battle panel. */
     static MatchResultView view(ClientController client)throws Exception {
         javax.swing.JDialog dialog=(javax.swing.JDialog)field(field(client,"battlePanel"),"resultDialog");
         return (MatchResultView)dialog.getContentPane();
@@ -54,7 +52,6 @@ public class SwingSmoke {
             login(a,server.getPort(),"gui_a");login(b,server.getPort(),"gui_b");
             waitFor(()->((JTable)field(field(a,"lobbyFrame"),"tblOnlineUsers")).getRowCount()==1,"opponent visible in lobby");
             edt(()->{snapshot((Component)field(a,"lobbyFrame"),dir.resolve("lobby.png"));snapshotMinimum((JFrame)field(a,"lobbyFrame"),dir.resolve("lobby-small.png"));});
-            // Room creation/join, then actual WINDOW_CLOSING in PLACING.
             edt(()->clickField(field(a,"lobbyFrame"),"btnCreateRoom"));waitFor(()->present(a,"roomId"),"create room ack");
             edt(()->snapshot((Component)field(a,"lobbyFrame"),dir.resolve("room.png")));
             edt(()->{Object lobby=field(b,"lobbyFrame");((JTextField)field(lobby,"txtRoomCode")).setText(((String)field(a,"roomId")).toLowerCase(java.util.Locale.ROOT));clickField(lobby,"btnJoin");});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"join room placement");
@@ -70,9 +67,7 @@ public class SwingSmoke {
                 clickField(p,"btnReset");TestRunner.check(!((JButton)field(p,"btnReady")).isEnabled(),"reset disables Ready");
             });
             closePlacement(a);waitFor(()->!present(b,"gameWindow"),"opponent returns lobby");
-            // Invite dialog acceptance through the real Swing button.
             edt(()->a.sendInvite(((User)field(b,"currentUser")).getUserId()));chooseConfirm();waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"invite placement");closePlacement(b);waitFor(()->!present(a,"gameWindow"),"invite cancellation cleanup");
-            // Queue cancellation and pairing through visible buttons.
             edt(()->clickField(field(a,"lobbyFrame"),"btnQuickMatch"));waitFor(()->(Boolean)field(field(a,"lobbyFrame"),"inQueue"),"queued");edt(()->clickField(field(a,"lobbyFrame"),"btnQuickMatch"));waitFor(()->!(Boolean)field(field(a,"lobbyFrame"),"inQueue"),"queue canceled");
             edt(()->{clickField(field(a,"lobbyFrame"),"btnQuickMatch");clickField(field(b,"lobbyFrame"),"btnQuickMatch");});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"queue placement");arrange(a);arrange(b);
             edt(()->{snapshot((Component)field(a,"gameWindow"),dir.resolve("placement.png"));snapshotMinimum((JFrame)field(a,"gameWindow"),dir.resolve("placement-small.png"));});
@@ -87,7 +82,6 @@ public class SwingSmoke {
             ClientController shooter=first.get()==a?b:a;int[] sizes={5,4,3,3,2};
             for(int y=0;y<5;y++)for(int x=0;x<sizes[y];x++){final int cx=x,cy=y;edt(()->{Object battle=field(shooter,"battlePanel");Object grid=field(battle,"oppBoardGrid");((JButton[][])field(grid,"cellButtons"))[cx][cy].doClick(0);clickField(battle,"btnFire");clickField(battle,"btnFire");});waitFor(()->{Object battle=field(shooter,"battlePanel");return !(Boolean)field(battle,"pendingShot")&&!((BattlePanel)battle).isAnimating();},"shot ack");if(y==1&&x==3)edt(()->snapshot((Component)field(shooter,"gameWindow"),dir.resolve("battle-active.png")));}
             waitFor(()->(Boolean)field(field(a,"battlePanel"),"finished") && (Boolean)field(field(b,"battlePanel"),"finished"),"game over dialogs");waitFor(()->field(field(a,"battlePanel"),"resultDialog")!=null&&field(field(b,"battlePanel"),"resultDialog")!=null,"result after final explosion");TestRunner.check(server.getStorage().getMatchRecords().size()==1,"GUI fast clicks score once");
-            // The end screen must state the result the server decided: +3 to the winner, 0 to the loser.
             edt(()->{
                 MatchResultView winner=view(shooter),loser=view(shooter==a?b:a);
                 TestRunner.check(winner.won() && winner.awardedPoints()==3,"winner screen shows the +3 award, got "+winner.awardedPoints());
@@ -95,7 +89,6 @@ public class SwingSmoke {
                 TestRunner.check(!loser.won() && loser.awardedPoints()==0,"loser screen shows 0 points, got "+loser.awardedPoints());
                 TestRunner.check(!winner.isUnfolding()||winner.isUnfolding(),"charts are reachable while they animate");
             });
-            // Both sides receive the enemy fleet with the end message, so the report can show it.
             edt(()->{
                 @SuppressWarnings("unchecked") java.util.List<common.model.Ship> revealed=(java.util.List<common.model.Ship>)field(field(shooter,"battlePanel"),"revealedFleet");
                 TestRunner.check(revealed!=null && revealed.size()==5,"end of match releases the enemy fleet");
@@ -116,9 +109,6 @@ public class SwingSmoke {
                 TestRunner.check(((User)field(a,"currentUser")).getTotalPoints()==0,"surrender score is reflected in lobby");
                 snapshot((Component)lobby,dir.resolve("penalty.png"));
             });
-            // Match history: asked for from the lobby, after the rematch round is over.
-            // a closed the window, so a's newest row is a surrender while the first battle was
-            // decided by sinking the fleet, whichever side happened to shoot first.
             edt(()->a.requestMatchHistory(0));
             waitFor(()->{for(Window w:Window.getWindows())if(w instanceof MatchHistoryDialog && w.isShowing() && ((MatchHistoryDialog)w).rows().getRowCount()==2)return true;return false;},"match history dialog");
             edt(()->{

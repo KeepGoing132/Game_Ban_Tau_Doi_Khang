@@ -6,7 +6,6 @@ public enum MessageType {
     PLACE_SHIPS_RESP, PLAYER_READY_RESP, READY_STATE_NOTIFY,
     LEAVE_ROOM_RESP, QUEUE_JOIN_RESP, QUEUE_LEAVE_RESP, INVITE_RESP,
     SURRENDER_RESP, REMATCH_RESP, REMATCH_CONFIRM_RESP,
-    // 1. Auth & User
     DELETE_ACCOUNT_REQ, DELETE_ACCOUNT_RESP, BOT_MATCH_REQ, BOT_MATCH_RESP,
     LOGIN_REQ,
     LOGIN_RESP,
@@ -15,7 +14,6 @@ public enum MessageType {
     ONLINE_USERS_RESP,
     USER_STATUS_BROADCAST,
 
-    // 2. Lobby & Room
     CREATE_ROOM_REQ,
     CREATE_ROOM_RESP,
     JOIN_ROOM_REQ,
@@ -24,7 +22,6 @@ public enum MessageType {
     ROOM_USER_JOINED,
     ROOM_USER_LEFT,
 
-    // 3. Invite & Matchmaking
     INVITE_REQ,
     INVITE_NOTIFY,
     INVITE_RESPOND_REQ,
@@ -33,19 +30,16 @@ public enum MessageType {
     QUEUE_LEAVE_REQ,
     MATCH_FOUND,
 
-    // 4. Ship Placement & Ready
     PLACE_SHIPS_REQ,
     PLAYER_READY_REQ,
     OPPONENT_READY_NOTIFY,
     MATCH_START,
 
-    // 5. Battle & Turn
     FIRE_REQ,
     FIRE_RESULT,
     TURN_CHANGE,
     TIMEOUT_NOTIFY,
 
-    // 6. End Game & Rematch
     SURRENDER_REQ,
     MATCH_END,
     REMATCH_REQ,
@@ -53,18 +47,15 @@ public enum MessageType {
     REMATCH_CONFIRM_REQ,
     REMATCH_START,
 
-    // 7. Leaderboard
     GET_LEADERBOARD_REQ,
     LEADERBOARD_RESP,
 
-    // 8. General
     ERROR_NOTIFY,
     CHAT_SEND_REQ, CHAT_SEND_RESP,
     CHAT_HISTORY_REQ, CHAT_HISTORY_RESP,
     CHAT_CONVERSATIONS_REQ, CHAT_CONVERSATIONS_RESP,
     CHAT_MSG,
 
-    // 9. Match history
     GET_MATCH_HISTORY_REQ, MATCH_HISTORY_RESP,
     GET_MATCH_DETAIL_REQ, MATCH_DETAIL_RESP
 }

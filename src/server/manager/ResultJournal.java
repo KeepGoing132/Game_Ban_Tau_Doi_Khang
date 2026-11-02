@@ -8,7 +8,6 @@ import java.security.*;
 import java.util.*;
 import java.util.stream.Stream;
 
-/** One synced, atomically published record per finished match, before SQLite is updated. */
 final class ResultJournal {
     private static final long MAX_BYTES = 64L * 1024 * 1024;
     private static final long MAX_RECORD_BYTES = 1024 * 1024;
@@ -55,7 +54,6 @@ final class ResultJournal {
                 else System.err.println("[Journal] Unpublished/unrecognized file retained: " + path.getFileName());
             }
         }
-        // Original finish order makes reapplication deterministic across multiple results.
         records.sort(Comparator.comparingLong(m -> JsonUtil.getLong(m,"endedAt",0)));
         return records;
     }

@@ -13,10 +13,6 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Fleet deployment, staged at sea: the board floats over living water and the fleet panel is a wet
- * glass deck. The phase opens with the "cast off" entrance effect.
- */
 public class PlacementPanel extends OceanPanel {
     public interface ReadyListener {
         void onReady(List<Ship> ships);
@@ -25,7 +21,6 @@ public class PlacementPanel extends OceanPanel {
     private static final String[] SHIP_IDS = {"CARRIER", "BATTLESHIP", "CRUISER_1", "CRUISER_2", "DESTROYER"};
     private static final String[] SHIP_NAMES = {"Tàu sân bay", "Thiết giáp hạm", "Tuần dương I", "Tuần dương II", "Khu trục hạm"};
     private static final int[] SHIP_SIZES = GameConfig.SHIP_SIZES;
-    /** Each ship class carries its own colour, so the fleet list reads as a colourful roster. */
     private static final Color[] SHIP_ACCENTS = {Theme.AZURE, Theme.ORCHID, Theme.MAGENTA, Theme.MINT, Theme.AMBER};
     private static final int SHIP_COUNT = 5;
     private static final int BOARD_LIMIT = GameConfig.BOARD_SIZE;
@@ -91,8 +86,6 @@ public class PlacementPanel extends OceanPanel {
         refreshFleet();
     }
 
-    // ------------------------------------------------------------------ layout
-
     private JPanel header() {
         JPanel header = Theme.transparent(new BorderLayout(18, 0));
         SeaDecor compass = new SeaDecor(SeaDecor.Kind.COMPASS);
@@ -110,7 +103,6 @@ public class PlacementPanel extends OceanPanel {
         Theme.addStack(heading, rule, 0);
         header.add(heading, BorderLayout.CENTER);
 
-        // leaving during deployment is free: no penalty, the room is simply closed for both sides
         btnLeave.setToolTipText("Rời phòng bố trí và trở về sảnh (ESC)");
         Theme.styleButton(btnLeave, Theme.CORAL, Theme.BG_DARK);
         btnLeave.addActionListener(e -> leaveNow());
@@ -124,7 +116,6 @@ public class PlacementPanel extends OceanPanel {
         return header;
     }
 
-    /** Ship roster plus the placement tools, scrollable so a short window keeps every control. */
     private JPanel fleetDeck() {
         JPanel fleet = Theme.stack();
         JPanel fleetHead = Theme.transparent(new BorderLayout(10, 0));
@@ -169,7 +160,6 @@ public class PlacementPanel extends OceanPanel {
         return fleet;
     }
 
-    /** One roster row: the class name and its silhouette, drawn from the ship size. */
     private JButton shipButton(final int index) {
         JButton button = new JButton() {
             @Override
@@ -248,8 +238,6 @@ public class PlacementPanel extends OceanPanel {
         });
     }
 
-    // ------------------------------------------------------------------ server face
-
     public void setMatchInfo(String opponent, Runnable leave) {
         lblMatch.setText("Đối thủ: " + opponent);
         leaveListener = leave;
@@ -268,7 +256,6 @@ public class PlacementPanel extends OceanPanel {
         cancelReady = listener;
     }
 
-    /** Preparation countdown; the server decides what happens when it reaches zero. */
     public void setPlacementDeadline(long deadlineMs, long serverTimeMs) {
         placementEndNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, deadlineMs - serverTimeMs));
         updatePlacementClock();
@@ -343,8 +330,6 @@ public class PlacementPanel extends OceanPanel {
         super.removeNotify();
     }
 
-    // ------------------------------------------------------------------ placement
-
     private void toggleReady() {
         setPending();
         if (ready) {
@@ -356,7 +341,6 @@ public class PlacementPanel extends OceanPanel {
         }
     }
 
-    /** Exit to the lobby from the button or from ESC; the request is only sent once. */
     private void leaveNow() {
         if (!btnLeave.isEnabled() || leaveListener == null) {
             return;
@@ -383,7 +367,6 @@ public class PlacementPanel extends OceanPanel {
         for (int i = 0; i < size; i++) {
             Coordinate cell = new Coordinate(x + (isHorizontal ? i : 0), y + (isHorizontal ? 0 : i));
             for (Ship ship : placedShips) {
-                // the ship being re-placed may overlap its own previous cells
                 if (!ship.getId().equals(SHIP_IDS[currentShipIndex]) && ship.contains(cell)) {
                     return false;
                 }
@@ -423,7 +406,6 @@ public class PlacementPanel extends OceanPanel {
         placedShips.add(new Ship(id, SHIP_SIZES[currentShipIndex], cells));
         hoverX = hoverY = -1;
         GameAudio.play(GameAudio.Sound.SPLASH);
-        // jump to the next ship that still needs a position
         for (int step = 1; step <= SHIP_COUNT; step++) {
             int next = (currentShipIndex + step) % SHIP_COUNT;
             if (!isPlaced(next)) {
@@ -542,8 +524,6 @@ public class PlacementPanel extends OceanPanel {
         refreshGridVisuals();
     }
 
-    // ------------------------------------------------------------------ saved layouts
-
     private void presetDialog() {
         if (locked || presets == null || disposed) {
             return;
@@ -583,7 +563,6 @@ public class PlacementPanel extends OceanPanel {
         }
     }
 
-    /** Applies a saved layout after re-mapping its ships onto the five standard classes. */
     public void applyPreset(List<Ship> ships) {
         if (locked || disposed) {
             return;

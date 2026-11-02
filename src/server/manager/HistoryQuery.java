@@ -4,7 +4,6 @@ import common.protocol.JsonUtil;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/** Validated filters and keyset cursor, scoped to one account and one set of filters. */
 public final class HistoryQuery {
     public final int limit;
     public final String result, opponent;

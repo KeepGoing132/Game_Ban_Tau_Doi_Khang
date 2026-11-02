@@ -16,7 +16,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
 import java.util.prefs.Preferences;
 
-/** Regression cases for the October completion plan, with isolated accounts/files/processes. */
 public final class UpgradeTests {
     private static void check(boolean value,String text) { TestRunner.check(value,text); }
 

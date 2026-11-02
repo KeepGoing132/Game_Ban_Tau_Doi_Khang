@@ -11,7 +11,6 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Real TCP enforcement plus a controllable clock; no minute-long test sleeps. */
 public class PenaltyTests {
     static void check(boolean value,String text){TestRunner.check(value,text);}
     static Thread start(GameServer server)throws Exception {

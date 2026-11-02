@@ -3,7 +3,6 @@ package server.bot;
 import common.model.*;
 import java.util.*;
 
-/** Knowledge-only opponent: never receives the human's fleet or Board. */
 public final class BotBrain {
     public enum Difficulty {
         EASY, MEDIUM, HARD
@@ -14,7 +13,6 @@ public final class BotBrain {
 
     private final Difficulty difficulty;
     private final Random random;
-    /** What the bot knows about the enemy board: 0 unknown, 1 miss, 2 hit, 3 sunk. */
     private final int[][] known = new int[10][10];
     private final boolean[][] fired = new boolean[10][10];
     private final List<Integer> remaining = new ArrayList<>(Arrays.asList(5, 4, 3, 3, 2));
@@ -24,7 +22,6 @@ public final class BotBrain {
         this.random = random;
     }
 
-    /** Chooses the next shot, weighted by the difficulty level. */
     public Coordinate choose() {
         List<Coordinate> candidates = new ArrayList<>();
         int[][] weights = new int[10][10];
@@ -50,7 +47,6 @@ public final class BotBrain {
                     weight = weights[x][y];
                 }
                 if (difficulty == Difficulty.MEDIUM) {
-                    // hunt on the checkerboard pattern, and chase any neighbour of a hit
                     weight = (x + y) % 2 == 0 ? 1 : 0;
                     int[][] directions = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
                     for (int[] direction : directions) {
@@ -77,10 +73,6 @@ public final class BotBrain {
         return choice;
     }
 
-    /**
-     * HARD: counts, for every remaining ship, how many placements would explain the current hits,
-     * and prefers the cells that most of those placements cover.
-     */
     private void weightByDensity(int[][] weights, boolean hasHit) {
         for (int size : remaining) {
             for (int horizontal = 0; horizontal < 2; horizontal++) {
@@ -113,7 +105,6 @@ public final class BotBrain {
         }
     }
 
-    /** Records the public result of one shot; the bot never sees the board itself. */
     public void observe(Coordinate point, ShotResult result, List<Coordinate> sunk) {
         fired[point.getX()][point.getY()] = true;
         known[point.getX()][point.getY()] = result == ShotResult.MISS ? MISS : HIT;
@@ -126,7 +117,6 @@ public final class BotBrain {
         }
     }
 
-    /** A random but always legal fleet, used by the bot and by the tests. */
     public static List<Ship> fleet(Random random) {
         boolean[][] occupied = new boolean[10][10];
         List<Ship> fleet = new ArrayList<>();

@@ -15,7 +15,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-/** Command room: profile, online commanders and the four ways into a match. */
 public class LobbyFrame extends JFrame {
     private final ClientController controller;
     private final JLabel lblUserInfo = Theme.label("Chào mừng, chỉ huy", Theme.FONT_TITLE, Theme.TEXT_MAIN);
@@ -95,8 +94,6 @@ public class LobbyFrame extends JFrame {
         updateActions();
     }
 
-    // ------------------------------------------------------------------ layout
-
     private JPanel sidebar() {
         JPanel sidebar = Theme.stack();
         sidebar.setOpaque(true);
@@ -159,7 +156,6 @@ public class LobbyFrame extends JFrame {
         return card;
     }
 
-    /** Quick match and practice, the two ways into a match without a code. */
     private JPanel matchmakingCard() {
         JPanel queue = Theme.vividCard(new Color(21, 84, 116), new Color(74, 58, 140), 22);
         queue.setLayout(new BorderLayout(12, 12));
@@ -180,7 +176,6 @@ public class LobbyFrame extends JFrame {
         return queue;
     }
 
-    /** Online list with the per-commander actions: invite, chat and history. */
     private JPanel onlineCard() {
         JPanel online = Theme.createCardPanel();
         online.setLayout(new BorderLayout(0, 10));
@@ -201,7 +196,6 @@ public class LobbyFrame extends JFrame {
         tblOnlineUsers.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
             public Component getTableCellRendererComponent(JTable table, Object value, boolean selected, boolean focus, int row, int column) {
                 super.getTableCellRendererComponent(table, value, selected, focus, row, column);
-                // the ID column is hidden in the view, so status lives at view column 2
                 String status = String.valueOf(table.getValueAt(row, 2));
                 Color color = column == 0 ? Theme.SEA_FOAM
                         : column == 1 ? Theme.AMBER
@@ -331,8 +325,6 @@ public class LobbyFrame extends JFrame {
         }
     }
 
-    // ------------------------------------------------------------------ state
-
     public void updateUserInfo(User user) {
         if (user == null) {
             return;
@@ -402,7 +394,6 @@ public class LobbyFrame extends JFrame {
         return penaltyPending || (penaltyDeadlineNanos != 0 && penaltyDeadlineNanos - System.nanoTime() > 0);
     }
 
-    /** The server owns the deadline; the lobby only counts it down. */
     public void setPenalty(long remainingMs, boolean awaitingSave) {
         penaltyDeadlineNanos = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(Math.max(0, remainingMs));
         penaltyPending = awaitingSave;
@@ -545,12 +536,9 @@ public class LobbyFrame extends JFrame {
         showStatus("Đã gửi lời mời. Đang chờ đối thủ trả lời...", false);
     }
 
-    /** Connection state measured by the heartbeat round trip. */
     public void setConnectionStatus(String value) {
         lblConnection.setText("<html>" + Theme.html(value) + "</html>");
     }
-
-    // ------------------------------------------------------------------ dialogs
 
     private void botDialog() {
         JDialog dialog = new JDialog(this, "Đấu máy", true);

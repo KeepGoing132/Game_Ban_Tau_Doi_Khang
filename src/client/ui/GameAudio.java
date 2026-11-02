@@ -15,17 +15,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 
-/**
- * Original synthesized sounds, mixed for a cinematic feel.
- *
- * <p>Every cue fades in and out with a raised-cosine window, so a buffer never starts or stops on a
- * step (that step is what is heard as a click). Noise is low-pass filtered instead of raw, and the
- * loud cues are layered (body + rumble + bubbles) rather than one bright buzz. Levels are split
- * into a master, an effects and a sea-ambience channel, all persisted; the ambience one is applied
- * live through the line's gain control when the mixer supports it.</p>
- *
- * <p>Audio runs on its own daemon threads and never blocks Swing or network processing.</p>
- */
 public final class GameAudio {
     public enum Sound {
         CLICK, SELECT, LAUNCH, MISS, HIT, SUNK, TURN, WIN, LOSE, SPLASH, WAVE, PING
@@ -54,8 +43,6 @@ public final class GameAudio {
         thread.setDaemon(true);
         return thread;
     }
-
-    // ------------------------------------------------------------------ levels
 
     public static boolean isEnabled() {
         return enabled;
@@ -104,7 +91,6 @@ public final class GameAudio {
         applyAmbienceGain();
     }
 
-    /** Back to the factory levels; used by the settings dialog. */
     public static void resetLevels() {
         setMasterVolume(.85f);
         setSfxVolume(.95f);
@@ -122,8 +108,6 @@ public final class GameAudio {
     private static double sfxGain() {
         return enabled ? masterVolume * effectsVolume : 0;
     }
-
-    // ------------------------------------------------------------------ playback
 
     public static void play(Sound sound) {
         if (!enabled || sfxGain() <= 0) {
@@ -157,11 +141,9 @@ public final class GameAudio {
                 closeQuietly(clip);
             }
         } catch (Exception ignored) {
-            // machines without an audio device still play normally
         }
     }
 
-    /** Every voice fades out instead of being cut, so muting is never a click. */
     private static void fadeOutAll() {
         for (Clip clip : playing) {
             WORK.execute(() -> ramp(clip, gainOf(clip), -80f, 180, true));
@@ -174,7 +156,6 @@ public final class GameAudio {
         return new AudioFormat(RATE, 16, 1, true, false);
     }
 
-    /** PCM used by the playback path and by the audio tests. */
     public static byte[] synthesize(Sound sound) {
         return synthesize(sound, .9);
     }
@@ -190,7 +171,6 @@ public final class GameAudio {
             double t = i / (double) RATE;
             double p = t / duration;
             double grain = noise.nextDouble() * 2 - 1;
-            // filtered noise beds: a fast one for texture, a slow one for weight
             hiss += .35 * (grain - hiss);
             rumble += .05 * (grain - rumble);
             double value;
@@ -204,7 +184,6 @@ public final class GameAudio {
                     value = .8 * Math.sin(phase) * Math.exp(-7 * t) + .2 * Math.sin(2 * phase) * Math.exp(-11 * t);
                     break;
                 case TURN:
-                    // two soft chimes that overlap, so the change of note is a crossfade, not a step
                     double firstChime = Math.exp(-6 * t) * Math.sin(2 * Math.PI * 660 * t);
                     double secondChime = t < .18 ? 0 : Math.exp(-5.4 * (t - .18)) * Math.sin(2 * Math.PI * 990 * (t - .18)) * smooth((t - .18) / .10);
                     value = .72 * (firstChime + .85 * secondChime);
@@ -230,7 +209,6 @@ public final class GameAudio {
                     phase += 2 * Math.PI * (96 - 50 * smooth(p * 1.2)) / RATE;
                     phase2 += 2 * Math.PI * (176 + 12 * Math.sin(2 * Math.PI * 3.1 * t)) / RATE;
                     swell += .05 * (grain - swell);
-                    // deep boom, groaning hull, then a rising stream of bubbles
                     double bubbles = t < .55 ? 0 : Math.max(0, .30 * Math.sin(2 * Math.PI * (4 + 9 * p) * t) * Math.sin(Math.PI * Math.min(1, (p - .55) / .45)));
                     value = .85 * Math.sin(phase) * Math.exp(-2.1 * t)
                             + .30 * Math.sin(phase2) * Math.exp(-3.2 * t) * .6
@@ -254,7 +232,6 @@ public final class GameAudio {
                     value = .74 * Math.sin(phase) * Math.exp(-2.7 * t) + echo + .14 * Math.sin(2.3 * phase) * Math.exp(-4 * t);
                     break;
                 case WIN: {
-                    // rising major arpeggio over a soft pad, with a shimmer on top
                     double[] notes = {523.25, 659.25, 783.99, 1046.5};
                     double arpeggio = 0;
                     for (int note = 0; note < notes.length; note++) {
@@ -275,7 +252,6 @@ public final class GameAudio {
                     break;
                 }
                 case LOSE: {
-                    // a low minor swell sliding down, like a hull giving up
                     phase += 2 * Math.PI * (392 - 96 * smooth(p)) / RATE;
                     phase2 += 2 * Math.PI * (311.1 - 70 * smooth(p)) / RATE;
                     double pad = (.26 * Math.sin(2 * Math.PI * 98 * t) + .20 * Math.sin(2 * Math.PI * 130.8 * t))
@@ -314,7 +290,6 @@ public final class GameAudio {
         }
     }
 
-    /** Raised-cosine fades on both ends: the one rule that keeps every cue click-free. */
     private static double window(double t, double duration) {
         double attack = smooth(t / .020);
         double release = smooth((duration - t) / .055);
@@ -326,12 +301,9 @@ public final class GameAudio {
         return value * value * (3 - 2 * value);
     }
 
-    /** Gentle saturation instead of hard clipping, so loud layers stay musical. */
     private static double softLimit(double value) {
         return value / (1 + Math.abs(value) * .35);
     }
-
-    // ------------------------------------------------------------------ sea ambience
 
     public static void battle(boolean active) {
         inBattle = active;
@@ -372,7 +344,6 @@ public final class GameAudio {
             clip.start();
             ramp(clip, -80f, gainOf(clip), 700, false);
         } catch (Exception ignored) {
-            // no ambience on machines without an audio device
         }
     }
 
@@ -385,7 +356,6 @@ public final class GameAudio {
         WORK.execute(() -> ramp(clip, gainOf(clip), target, 260, false));
     }
 
-    /** Lowers the sea for a moment under a heavy impact, then brings it back: cinematic ducking. */
     private static void duckAmbience(int millis, double factor) {
         Clip clip = ambience;
         if (clip == null) {
@@ -424,7 +394,6 @@ public final class GameAudio {
         }
     }
 
-    /** Steps the line gain in small increments; without a gain control the clip is simply closed. */
     private static void ramp(Clip clip, float from, float to, int millis, boolean closeAfter) {
         try {
             FloatControl control = gain(clip);
@@ -444,7 +413,6 @@ public final class GameAudio {
                 Thread.sleep(Math.max(1, millis / steps));
             }
         } catch (Exception ignored) {
-            // a line that disappears mid-ramp is already gone
         } finally {
             if (closeAfter) {
                 closeQuietly(clip);
@@ -456,25 +424,17 @@ public final class GameAudio {
         try {
             clip.stop();
         } catch (Exception ignored) {
-            // already stopped
         }
         try {
             clip.close();
         } catch (Exception ignored) {
-            // already closed
         }
     }
 
-    /** Four seconds of open sea: swell, foam hiss, a low drone and a distant gull. */
     public static byte[] surfLoop() {
         return surfLoop(.6);
     }
 
-    /**
-     * Synthesizes four seconds of sea plus half a second extra, then folds that extra tail back into
-     * the head. The waveform therefore continues across the loop point instead of restarting, which
-     * is what a plain loop would hear as a tick every four seconds.
-     */
     public static byte[] surfLoop(double gain) {
         int frames = RATE * 4;
         int seam = RATE / 2;
@@ -492,7 +452,6 @@ public final class GameAudio {
             double rumble = (low - deep) * 3.0;
             phase += 2 * Math.PI * (44 + 6 * Math.sin(2 * Math.PI * p)) / RATE;
             drone += 2 * Math.PI * (55 + 3 * Math.sin(2 * Math.PI * .5 * p)) / RATE;
-            // long foam hiss that peaks with each swell instead of a constant static bed
             double hiss = (grain - foam) * (.30 + .40 * surge) * .55;
             double gull = gullCry(p, t);
             double horn = p > .78 && p < .93 ? .06 * Math.sin(2 * Math.PI * 138.6 * t) * Math.sin(Math.PI * (p - .78) / .15) : 0;

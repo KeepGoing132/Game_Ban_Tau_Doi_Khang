@@ -71,7 +71,6 @@ public class ClientHandler implements Runnable {
             }
         }
         catch(IOException e) {
-            /* EOF, malformed UTF-8 and oversized frames close this connection only. */
         }
         finally {
             close();
@@ -250,7 +249,6 @@ public class ClientHandler implements Runnable {
         }
     }
 
-    /** Only explicit direct responses echo request_id. Events never enter replay cache. */
     public void reply(Message msg) {
         if(Boolean.TRUE.equals(processing.get()) && currentRequest!=null) {
             msg.requestId(currentRequest.getRequestId());
@@ -263,7 +261,6 @@ public class ClientHandler implements Runnable {
     public void sendMessage(Message msg) {
         LineConnection c=connection;
         if(c!=null && !closed.get() && msg!=null) {
-            // Freeze event data before returning to the domain lock.
             Message copy=Message.fromJson(msg.toJson());
             copy.serverTime(System.currentTimeMillis());
             c.send(copy);

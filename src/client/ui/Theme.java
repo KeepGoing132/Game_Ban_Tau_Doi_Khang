@@ -8,7 +8,6 @@ import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 
-/** Shared visual language for the desktop client. No external UI dependencies. */
 public final class Theme {
     private Theme() { }
     public static final Color BG_DARK = new Color(16, 21, 46);
@@ -19,7 +18,6 @@ public final class Theme {
     public static final Color PRIMARY_HOVER = new Color(133, 238, 213);
     public static final Color VIOLET = new Color(168,145,255);
     public static final Color BLUE = new Color(99,180,255);
-    // Vivid accents used across the screens so each section has its own colour.
     public static final Color MAGENTA = new Color(236, 126, 226);
     public static final Color ORCHID = new Color(196, 128, 255);
     public static final Color AZURE = new Color(96, 196, 255);
@@ -39,7 +37,6 @@ public final class Theme {
     public static final Color CELL_HIT = new Color(168, 68, 80);
     public static final Color CELL_MISS = new Color(27, 53, 89);
     public static final Color CELL_SUNK = new Color(85, 47, 89);
-    // Sea palette used by the in-match screens: sunset sky, turquoise shallows, foam, wet glass.
     public static final Color SEA_SKY_TOP = new Color(14, 18, 60);
     public static final Color SEA_SKY_MID = new Color(92, 58, 146);
     public static final Color SEA_SKY_LOW = new Color(238, 148, 118);
@@ -98,7 +95,6 @@ public final class Theme {
         g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         return g2;
     }
-    /** Off-screen surface with the same quality hints, for cached layers and sprites. */
     public static Graphics2D graphics(BufferedImage image) {
         return graphics(image.createGraphics());
     }
@@ -159,23 +155,19 @@ public final class Theme {
         JPanel p = new RoundedPanel(color);
         p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
     }
-    /** A card that stays see-through so the animated sea behind it remains readable. */
     public static JPanel glassCard(int padding) { return glassCard(SEA_GLASS, 156, padding); }
     public static JPanel glassCard(Color base, int alpha, int padding) {
         JPanel p = new RoundedPanel(base, alpha);
         p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
     }
-    /** In-match card: wet glass sheen, horizon-tinted outline, optional wave line under the title. */
     public static JPanel seaCard(int alpha, int padding) {
         RoundedPanel p = new RoundedPanel(SEA_GLASS, alpha); p.setSheen(true);
         p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
     }
-    /** Card with a two-tone fill, so panels carry some colour instead of a flat rectangle. */
     public static JPanel vividCard(Color from, Color to, int padding) {
         RoundedPanel p = new RoundedPanel(from); p.setGradientTo(to); p.setSheen(true);
         p.setBorder(new EmptyBorder(padding, padding, padding, padding)); return p;
     }
-    /** Battle-log rows: the outcome word decides the colour of the line. */
     public static javax.swing.ListCellRenderer<Object> logRenderer() {
         return new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> list,Object value,int index,boolean selected,boolean focus) {
@@ -229,7 +221,6 @@ public final class Theme {
             g2.dispose(); super.paintComponent(g);
         }
     }
-    /** Title text with a two-tone gradient and an optional light sweep, for the sea screens. */
     public static class SeaTitle extends JLabel {
         private boolean shimmer;
         private Color from = SEA_FOAM, to = new Color(120, 226, 226);
@@ -319,7 +310,6 @@ public final class Theme {
             }
         });
     }
-    /** Lets the sea behind a scrollable list show through instead of painting a panel colour. */
     public static void transparentScroll(JScrollPane scroll) {
         Color clear = new Color(0, 0, 0, 0);
         scroll.setOpaque(false); scroll.setBackground(clear);
@@ -336,7 +326,6 @@ public final class Theme {
             protected void paintThumb(Graphics g,JComponent c,Rectangle r){Graphics2D g2=graphics(g);g2.setColor(isThumbRollover()?TEXT_MUTED:BORDER_COLOR);g2.fillRoundRect(r.x+2,r.y,r.width-4,r.height,6,6);g2.dispose();}
         });return s;
     }
-    /** A content area that scrolls only when its minimum useful layout no longer fits. */
     public static JScrollPane scrollPage(JComponent content,int height,Color background) {
         class Page extends JPanel implements Scrollable {
             Page(){super(new BorderLayout());setOpaque(false);add(content);setPreferredSize(new Dimension(1,height));}

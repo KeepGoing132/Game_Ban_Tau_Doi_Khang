@@ -6,7 +6,6 @@ import java.awt.*;
 import java.util.Arrays;
 import java.util.function.BiConsumer;
 
-/** Modeless so network callbacks and lobby lifecycle changes continue while it is open. */
 public final class PasswordDialog extends JDialog {
     private final JPasswordField oldPassword = new JPasswordField(24);
     private final JPasswordField newPassword = new JPasswordField(24);

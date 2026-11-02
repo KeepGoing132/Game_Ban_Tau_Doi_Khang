@@ -86,7 +86,6 @@ public class IntegrationTests {
             Message next=shooter.waitType(MessageType.TURN_CHANGE);target.waitType(MessageType.TURN_CHANGE);int newTurn=JsonUtil.requireInt(next.getData(),"turn_id");check(newTurn==turn+1 && JsonUtil.requireInt(next.getData(),"current_turn_player_id")==shooter.userId,"hit keeps shooter advances turn");
             error(shooter,match(MessageType.FIRE_REQ,id).put("turn_id",turn).put("x",1).put("y",0),"STALE_TURN");error(shooter,match(MessageType.FIRE_REQ,id).put("turn_id",newTurn).put("x",0).put("y",0),"ALREADY_SHOT");
             Message miss=ok(shooter,match(MessageType.FIRE_REQ,id).put("turn_id",newTurn).put("x",9).put("y",9));check("MISS".equals(miss.getData().get("result")),"miss");next=target.waitType(MessageType.TURN_CHANGE);shooter.waitType(MessageType.TURN_CHANGE);check(JsonUtil.requireInt(next.getData(),"current_turn_player_id")==target.userId,"miss changes turn");
-            // Target now sinks the full fleet in 17 hits; no opponent fleet coordinates leak before sinking.
             shooter=target;target=shooter==a?b:a;turn=JsonUtil.requireInt(next.getData(),"turn_id");int[] sizes={5,4,3,3,2};int sunk=0;
             for(int y=0;y<5;y++)for(int x=0;x<sizes[y];x++){
                 Message result=ok(shooter,match(MessageType.FIRE_REQ,id).put("turn_id",turn).put("x",x).put("y",y));
@@ -97,12 +96,10 @@ public class IntegrationTests {
             ok(a,match(MessageType.REMATCH_REQ,id));ok(b,match(MessageType.REMATCH_REQ,id));Message rm=a.waitType(MessageType.REMATCH_START);b.waitType(MessageType.REMATCH_START);String rematch=(String)rm.getData().get("match_id");check(!rematch.equals(id),"new rematch id");error(a,ready(id,true),"STALE_MATCH");
             battle=start(a,b,rematch);Message timeout=a.waitFor(m->m.getType()==MessageType.TIMEOUT_NOTIFY && rematch.equals(m.getData().get("match_id")),GameConfig.TURN_TIMEOUT_MS+3000);check(!timeout.getData().containsKey("auto_x"),"timeout never auto fires");next=a.waitFor(m->m.getType()==MessageType.TURN_CHANGE && rematch.equals(m.getData().get("match_id")),5000);check(JsonUtil.requireInt(next.getData(),"current_turn_player_id")!=JsonUtil.requireInt(battle.getData(),"current_turn_player_id"),"timeout swaps shooter");
             ok(a,match(MessageType.SURRENDER_REQ,rematch));check(server.getStorage().getMatchRecords().size()==2,"surrender result once");a.waitType(MessageType.ROOM_USER_LEFT);b.waitType(MessageType.ROOM_USER_LEFT);
-            // The other RUNNING session remains independent after the first match ends.
             ok(c,match(MessageType.SURRENDER_REQ,other));check(server.getStorage().getMatchRecords().size()==3,"other match independent");c.waitType(MessageType.ROOM_USER_LEFT);d.waitType(MessageType.ROOM_USER_LEFT);
             Message board=ok(d,new Message(MessageType.GET_LEADERBOARD_REQ));check(JsonUtil.getList(board.getData(),"leaderboard").size()==4,"leaderboard accounts");
             ok(d,new Message(MessageType.LOGOUT_REQ));error(d,new Message(MessageType.GET_LEADERBOARD_REQ),"UNAUTHENTICATED");
             Message oldBoard=board;error(d,new Message(MessageType.GET_LEADERBOARD_REQ).requestId(oldBoard.getRequestId()),"UNAUTHENTICATED");
-            // Oversized and incomplete/malformed UTF-8 connections cannot disturb authenticated peers.
             try(SocketPeer bad=new SocketPeer(port,false)){bad.raw(String.join("",Collections.nCopies(65538,"x")));}
             try(SocketPeer bad=new SocketPeer(port,false)){bad.raw("{\"type\":");bad.socket.shutdownOutput();}
             try(SocketPeer bad=new SocketPeer(port,false)){bad.socket.getOutputStream().write(new byte[]{(byte)0xC3,0x28,10});bad.socket.getOutputStream().flush();}

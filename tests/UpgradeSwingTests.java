@@ -13,7 +13,6 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.prefs.Preferences;
 
-/** Real Swing/TCP checks for password, history filters/pages, presets and the placement clock. */
 public final class UpgradeSwingTests {
     private static Object field(Object value,String name)throws Exception { return SwingSmoke.field(value,name); }
     private static void check(boolean value,String text) { TestRunner.check(value,text); }

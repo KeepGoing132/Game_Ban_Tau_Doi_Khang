@@ -9,7 +9,6 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.function.LongSupplier;
 
-/** SQLite transactions are the source of truth; legacy JSON is imported once. */
 public class StorageManager {
     private final Path directory;
     private final Path snapshot;
@@ -45,7 +44,6 @@ public class StorageManager {
                 else if (Files.exists(oldMatches)) throw new IOException("matches.json exists without users.json");
                 else initSamples();
                 if (Files.exists(oldMatches)) loadMatches(JsonUtil.parseList(read(oldMatches)));
-                // Legacy source files remain untouched and an extra backup preserves their bytes.
                 for (Path source : Arrays.asList(users, oldMatches)) {
                     if (Files.exists(source)) Files.copy(source, this.directory.resolve(source.getFileName() + ".legacy.bak"), StandardCopyOption.REPLACE_EXISTING);
                 }
@@ -59,7 +57,6 @@ public class StorageManager {
         for (Map<String,Object> payload : journal.pending()) {
             String id=JsonUtil.getString(payload,"matchId","");
             if (matches.containsKey(id)) { clearJournal(id); continue; }
-            // Use the same account/result validation as normal database loading.
             loadMatches(Collections.<Object>singletonList(payload));
             MatchRecord record=matches.remove(id);
             pending.put(id,record);
@@ -124,7 +121,6 @@ public class StorageManager {
             matches.put(r.getMatchId(),r);
         }
     }
-    /** Fleets and shot logs are optional: records stored before the replay feature simply have none. */
     @SuppressWarnings("unchecked")
     private static List<Map<String,Object>> fleetList(Map<String,Object> m,String key) {
         List<Map<String,Object>> fleet=new ArrayList<>();
@@ -302,7 +298,6 @@ public class StorageManager {
         catch (java.sql.SQLException e) { throw new DomainException("STORAGE_ERROR","Không tải được lịch sử. Hãy thử lại."); }
     }
 
-    /** Finished matches of one account, newest first; used by the match-history view. */
     public synchronized List<MatchRecord> historyFor(int userId,final int limit) {
         List<MatchRecord> mine=new ArrayList<>();
         for(MatchRecord r:matches.values())if(r.getPlayer1Id()==userId || r.getPlayer2Id()==userId)mine.add(r);
@@ -315,7 +310,6 @@ public class StorageManager {
         return mine.size()>limit?new ArrayList<>(mine.subList(0,limit)):mine;
     }
 
-    /** Pending forfeits stay blocked until persisted, even if their minute has elapsed. */
     public synchronized Map<String,Object> penaltyInfo(User user) {
         long until=user.getMatchmakingBlockedUntil();boolean awaitingSave=false;
         for(MatchRecord r:pending.values())if(r.getLoserId()==user.getUserId() && r.getMatchmakingBlockedUntil()>0) {

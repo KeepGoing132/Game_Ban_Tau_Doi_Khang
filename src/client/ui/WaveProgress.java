@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.*;
 
-/** A progress bar shaped like a flooded tube: the level is the value and the surface ripples. */
 public class WaveProgress extends JProgressBar {
     public WaveProgress(int minimum,int maximum) { super(minimum,maximum); setOpaque(false); setBorderPainted(false); }
     @Override protected void paintComponent(Graphics graphics) {
@@ -35,6 +34,5 @@ public class WaveProgress extends JProgressBar {
         g.setColor(new Color(255,255,255,36));g.fillRoundRect(1,1,w-2,Math.max(1,h/3),h,h);
         g.dispose();
     }
-    /** Water takes the colour of the bar's foreground, so callers can tint the tide. */
     @Override public void setForeground(Color color) { super.setForeground(color); repaint(); }
 }

@@ -17,7 +17,6 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Exercises new controls and captures the real Java2D animation frames. */
 public final class VisualFeatureTests {
     private static void check(boolean value,String text){TestRunner.check(value,text);}
     private static Object field(Object o,String name)throws Exception{return SwingSmoke.field(o,name);}

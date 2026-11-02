@@ -47,7 +47,6 @@ public class GameServer {
         if(!stopped.compareAndSet(false,true))return;
         running=false;
         try{if(listener!=null)listener.close();}catch(IOException ignored){}
-        // Server shutdown cancels sessions before socket cleanup to avoid awarding shutdown wins.
         matches.shutdown();lobby.shutdown();
         storage.retryPending();
         if (storage.getPendingCount() > 0)

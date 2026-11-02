@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.sql.*;
 import java.util.*;
 
-/** Short-lived JDBC connections; one transaction commits accounts and match results. */
 final class SqliteStore {
     private static final String HISTORY_TIME = "CASE WHEN COALESCE(json_extract(payload,'$.endedAt'),0)>0 THEN json_extract(payload,'$.endedAt') ELSE COALESCE(json_extract(payload,'$.timestamp'),0) END";
     private final String url;
@@ -72,7 +71,6 @@ final class SqliteStore {
         try(Statement s=c.createStatement()){s.execute("PRAGMA busy_timeout=5000");s.execute("PRAGMA synchronous=FULL");s.execute("PRAGMA secure_delete=ON");}
         return c;
     }
-    /** Keyset pagination excludes records inserted after the first page's rowid watermark. */
     Map<String,Object> history(int target, HistoryQuery query) throws SQLException {
         try (Connection c=open()) {
             long snapshot=query.snapshot;

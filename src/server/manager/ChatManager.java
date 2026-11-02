@@ -4,7 +4,6 @@ import common.protocol.*;
 import server.network.ClientHandler;
 import java.util.*;
 
-/** Private messages: identity comes exclusively from the authenticated socket. */
 public final class ChatManager {
     private final UserManager users;
     private final StorageManager storage;
@@ -17,7 +16,6 @@ public final class ChatManager {
         Map<String,Object> message=storage.saveChat(sender.getUser().getUserId(),target,(String)d.get("body"),(String)d.get("client_message_id"));
         boolean created=Boolean.TRUE.equals(message.remove("_created"));
         sender.reply(new Message(MessageType.CHAT_SEND_RESP).put("chat",message));
-        // Deliver only after SQLite commits. Retried sends never produce duplicate events.
         ClientHandler recipient=users.getClientById(target);
         if(created && recipient!=null)recipient.sendMessage(new Message(MessageType.CHAT_MSG).put("chat",message));
         }

@@ -9,7 +9,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.LongSupplier;
 
-/** Authoritative state machine. The registry lock is never acquired from inside this lock. */
 public class MatchSession {
     public enum State {
         PLACING,RUNNING,FINISHED,CANCELLED
@@ -22,7 +21,6 @@ public class MatchSession {
     private State state=State.PLACING;
     private int currentPlayer=-1,turnId,shots1,shots2;
 
-    /** Accepted shots in firing order; stored with the result so the two players can replay it. */
     private final List<Map<String,Object>> shotLog=new ArrayList<>();
     private long startedAt,endedAt,deadlineMs,deadlineNanos,rematchDeadline;
     private final UserManager users;
@@ -61,7 +59,6 @@ public class MatchSession {
         placementDeadlineNanos = nano.getAsLong() + TimeUnit.MILLISECONDS.toNanos(GameConfig.PLACEMENT_TIMEOUT_MS);
     }
 
-    /** Called after registration, so an expiry callback can safely release this session. */
     public synchronized void beginPlacement(Runnable onExpired) {
         placementExpiredCallback = onExpired;
         if (state == State.PLACING && placementTimer == null)
@@ -81,7 +78,6 @@ public class MatchSession {
         }
         state = State.CANCELLED;
         cancelTimers();
-        // Never acquire the registry lock while holding the match monitor.
         scheduler.execute(placementExpiredCallback);
     }
 
@@ -270,7 +266,6 @@ public class MatchSession {
         return m;
     }
 
-    /** Detaches the coordinate list from the event message, so the stored log owns its own maps. */
     private static List<Map<String,Object>> copyCoords(Object raw) {
         List<Map<String,Object>> copy=new ArrayList<>();
         if(raw instanceof List)for(Object item:(List<?>)raw)if(item instanceof Map) {
@@ -314,8 +309,6 @@ public class MatchSession {
         r.setPlayer1Points(winner==p1?3:0);
         r.setPlayer2Points(winner==p2?3:0);
         r.setReason(reason);
-        // Sealed fleets and the whole shot log are stored with the result, so both players can
-        // reopen this match from their own history. Nothing here leaves the server during a match.
         r.setPlayer1Ships(fleetOf(b1));
         r.setPlayer2Ships(fleetOf(b2));
         r.setShotLog(new ArrayList<>(shotLog));
@@ -332,11 +325,9 @@ public class MatchSession {
         users.updatePhase(p1,"POST_GAME");
         users.updatePhase(p2,"POST_GAME");
         Message end=event(MessageType.MATCH_END).put("winner_id",user(winner).getUserId()).put("loser_id",user(loser).getUserId()).put("reason",reason).put("duration_seconds",r.getDurationSeconds()).put("player1_shots",shots1).put("player2_shots",shots2).put("scores",scores).put("storage_saved",resultSaved).put("expires_at_ms",rematchDeadline);
-        // The match is over, so each side now receives the other side's fleet for the report.
         p1.sendMessage(copyOf(end).put("opponent_ships",fleetOf(b2)).put("opponent_shots",shots2));
         p2.sendMessage(copyOf(end).put("opponent_ships",fleetOf(b1)).put("opponent_shots",shots1));
         if(!resultSaved)both(Message.error(MessageType.ERROR_NOTIFY,"Kết quả đang chờ lưu; điểm chưa được áp dụng").errorCode("STORAGE_ERROR").put("match_id",matchId));
-        // Callback runs later on scheduler, outside this match lock.
         scheduler.execute(finishedCallback);
     }
 
@@ -344,7 +335,6 @@ public class MatchSession {
         return Message.fromJson(message.toJson());
     }
 
-    /** Fleet layout in the same shape as PLACE_SHIPS_REQ, released only once the match is over. */
     private static List<Map<String,Object>> fleetOf(Board board) {
         List<Map<String,Object>> fleet=new ArrayList<>();
         for(Ship ship:board.getShips()) {

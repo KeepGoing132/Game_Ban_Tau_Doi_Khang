@@ -8,7 +8,6 @@ import java.nio.charset.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Bounded UTF-8 line framing and asynchronous, ordered socket writes. */
 public final class LineConnection implements AutoCloseable {
     private final Socket socket;
     private final InputStream input;

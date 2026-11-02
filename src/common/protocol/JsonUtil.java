@@ -2,15 +2,7 @@ package common.protocol;
 
 import java.util.*;
 
-/**
- * Tiện ích xử lý JSON thuần Java (Zero-dependency), an toàn, tốc độ cao.
- * Hỗ trợ parse Object, Array, String, Number, Boolean, Null và serialize.
- */
 public class JsonUtil {
-
-    // ==========================================
-    // SERIALIZER
-    // ==========================================
 
     public static String toJson(Object obj) {
         if (obj == null) return "null";
@@ -59,7 +51,6 @@ public class JsonUtil {
             return sb.toString();
         }
 
-        // Với Java POJO thông thường, dùng reflection đọc getters hoặc fields
         return pojoToJson(obj);
     }
 
@@ -106,10 +97,6 @@ public class JsonUtil {
         }
         return sb.toString();
     }
-
-    // ==========================================
-    // PARSER
-    // ==========================================
 
     @SuppressWarnings("unchecked")
     public static Map<String, Object> parseObject(String json) {
@@ -184,7 +171,7 @@ public class JsonUtil {
 
         Map<String, Object> parseObject() {
             Map<String, Object> map = new LinkedHashMap<>();
-            next(); // Bỏ '{'
+            next();
             skipWhitespace();
             if (peek() == '}') {
                 next();
@@ -213,7 +200,7 @@ public class JsonUtil {
 
         List<Object> parseArray() {
             List<Object> list = new ArrayList<>();
-            next(); // Bỏ '['
+            next();
             skipWhitespace();
             if (peek() == ']') {
                 next();
@@ -308,10 +295,6 @@ public class JsonUtil {
             }
         }
     }
-
-    // ==========================================
-    // HELPER METHODS
-    // ==========================================
 
     public static String getString(Map<String, Object> map, String key, String def) {
         if (map == null || !map.containsKey(key) || map.get(key) == null) return def;

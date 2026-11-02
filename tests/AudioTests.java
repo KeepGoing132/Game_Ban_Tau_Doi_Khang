@@ -2,12 +2,6 @@ package tests;
 
 import client.ui.GameAudio;
 
-/**
- * Sound quality guard rails. The cues are synthesized, so their envelope can be measured: every
- * buffer must start and end at silence (otherwise the cut is heard as a click), keep headroom
- * instead of clipping, stay audible, and the tonal cues must never jump between neighbouring
- * samples (that is what makes a game sound "jarring").
- */
 public final class AudioTests {
     private static void check(boolean condition, String message) { TestRunner.check(condition, message); }
     private static final int FULL_SCALE = 32767;
@@ -32,7 +26,6 @@ public final class AudioTests {
             check(rms > FULL_SCALE * 0.01, sound + " is audible");
             if (isTonal(sound)) check(maxStep < FULL_SCALE * 0.12, sound + " has no step between neighbouring samples");
         }
-        // the sea loop must be seamless: crossing the loop point steps no further than the grain does
         byte[] surf = GameAudio.surfLoop(.6);
         int surfMaxStep = 0, surfPeak = 0, previous = 0;
         for (int i = 0; i < surf.length / 2; i++) {
@@ -44,7 +37,6 @@ public final class AudioTests {
         int seamStep = Math.abs(sample(surf, 0) - sample(surf, surf.length / 2 - 1));
         check(seamStep <= Math.max(900, surfMaxStep), "ambience loop crosses its seam without a jump, step " + seamStep);
         check(surfPeak < FULL_SCALE * 0.4, "ambience keeps headroom instead of clipping");
-        // level controls reach the mixer and are clamped
         float master = GameAudio.getMasterVolume();
         GameAudio.setMasterVolume(2f); check(GameAudio.getMasterVolume() == 1f, "master level is clamped to 1");
         GameAudio.setMasterVolume(-1f); check(GameAudio.getMasterVolume() == 0f, "master level is clamped to 0");
@@ -54,12 +46,10 @@ public final class AudioTests {
         System.out.println("PASS audio: click-free envelopes, headroom without clipping, smooth tonal cues, seamless sea loop, clamped levels");
     }
 
-    /** One little-endian signed sample of the synthesized PCM. */
     private static int sample(byte[] pcm, int index) {
         return (short) ((pcm[index * 2] & 0xff) | (pcm[index * 2 + 1] << 8));
     }
 
-    /** Noise-based cues are naturally grainy; the melodic ones must stay continuous. */
     private static boolean isTonal(GameAudio.Sound sound) {
         return sound != GameAudio.Sound.SPLASH && sound != GameAudio.Sound.MISS && sound != GameAudio.Sound.LAUNCH;
     }

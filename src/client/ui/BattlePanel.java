@@ -11,11 +11,6 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 
-/**
- * Combat screen. The whole phase is staged at sea: an animated swell behind translucent decks, a
- * sonar scope around the turn clock, a water-tube turn timer, glass tiles over living water on the
- * boards and shell impacts that throw foam and wreck bubbles.
- */
 public class BattlePanel extends OceanPanel {
     public interface BattleActionListener {
         void onFire(int x, int y);
@@ -27,9 +22,7 @@ public class BattlePanel extends OceanPanel {
         void onExitToLobby();
     }
 
-    /** Seconds the shell spends in the air before the impact effect starts. */
     private static final double SHELL_FLIGHT_SECONDS = .52;
-    /** Height of the ballistic arc the shell travels along. */
     private static final int ARC_HEIGHT = 150;
     private static final int MAX_TURN_SECONDS = 15;
     private static final int JOURNAL_LINES = 30;
@@ -39,7 +32,6 @@ public class BattlePanel extends OceanPanel {
     private final BoardGridPanel oppBoardGrid;
     private final String myName;
     private final String oppName;
-    /** Own fleet as deployed, kept for the after-action charts. */
     private final List<Ship> myFleet;
     private final JLabel lblTurnStatus = Theme.label("Chờ lệnh khai hỏa", Theme.FONT_HEADER, Theme.PRIMARY);
     private final JLabel lblTimer = Theme.label("15", Theme.FONT_GRID.deriveFont(Font.BOLD, 44f), Theme.SEA_FOAM);
@@ -86,7 +78,6 @@ public class BattlePanel extends OceanPanel {
     private Point effectTo;
     private Runnable afterEffect;
     private Runnable impactAction;
-    /** Enemy fleet released by the server once the match is over, for the battle report. */
     private List<Ship> revealedFleet;
     private boolean resultStorageSaved = true;
     private boolean rematchAllowed = true;
@@ -134,8 +125,6 @@ public class BattlePanel extends OceanPanel {
         GameAudio.play(GameAudio.Sound.WAVE);
     }
 
-    // ------------------------------------------------------------------ layout
-
     private JPanel header() {
         JPanel header = Theme.transparent(new BorderLayout(18, 0));
         SeaDecor compass = new SeaDecor(SeaDecor.Kind.COMPASS);
@@ -172,7 +161,6 @@ public class BattlePanel extends OceanPanel {
         return header;
     }
 
-    /** The combat log runs as a wide bar under the boards, so the entries stay readable. */
     private JPanel journal() {
         JPanel journal = Theme.seaCard(152, 14);
         journal.setLayout(new BorderLayout(12, 4));
@@ -202,7 +190,6 @@ public class BattlePanel extends OceanPanel {
         return journal;
     }
 
-    /** Turn state, sonar clock, fire button and the two fleet counters. */
     private JPanel commandDeck() {
         JPanel command = Theme.seaCard(152, 16);
         command.setLayout(new BoxLayout(command, BoxLayout.Y_AXIS));
@@ -234,7 +221,6 @@ public class BattlePanel extends OceanPanel {
         return command;
     }
 
-    /** The big board follows the action: attacking shows the enemy grid, defending shows yours. */
     private void focusBoard(boolean attack) {
         mainBoardHost.removeAll();
         miniBoardHost.removeAll();
@@ -271,8 +257,6 @@ public class BattlePanel extends OceanPanel {
         hint("Mục tiêu đã khóa. Nhấn Khai hỏa để bắn.", Theme.PRIMARY);
     }
 
-    // ------------------------------------------------------------------ state
-
     public void setPractice(boolean value) {
         practice = value;
     }
@@ -290,7 +274,6 @@ public class BattlePanel extends OceanPanel {
         applyResultStorage();
     }
 
-    /** The server may publish the final award only once the result is durable. */
     public void setSavedAward(int points) {
         savedAward = points;
         if (resultDialog != null && resultDialog.getContentPane() instanceof MatchResultView) {
@@ -312,7 +295,6 @@ public class BattlePanel extends OceanPanel {
         }
     }
 
-    /** Minimap on/off from the settings dialog; also keeps the header toggle in sync. */
     public void setMinimapVisible(boolean value) {
         preferences.putBoolean("minimap", value);
         if (miniToggle.isSelected() != value) {
@@ -345,8 +327,6 @@ public class BattlePanel extends OceanPanel {
         log(text);
     }
 
-    // ------------------------------------------------------------------ firing
-
     private void fire() {
         Coordinate target = oppBoardGrid.getSelectedCoordinate();
         if (target == null || !isMyTurn || pendingShot || finished || animating || remainingTime <= 0) {
@@ -367,7 +347,6 @@ public class BattlePanel extends OceanPanel {
         GameAudio.play(GameAudio.Sound.MISS);
     }
 
-    /** Applies the server verdict: the effect plays first, the marks land at the impact moment. */
     public void handleFireResult(boolean iAmShooter, Coordinate cell, ShotResult result, List<Coordinate> sunkCoords, int shipsLeft, boolean keepTurn) {
         startEffect(iAmShooter, cell, result);
         BoardGridPanel grid = iAmShooter ? oppBoardGrid : myBoardGrid;
@@ -453,8 +432,6 @@ public class BattlePanel extends OceanPanel {
         }
     }
 
-    // ------------------------------------------------------------------ shell effect
-
     private void startEffect(boolean shooter, Coordinate cell, ShotResult result) {
         if (impactAction != null) {
             impactAction.run();
@@ -521,7 +498,6 @@ public class BattlePanel extends OceanPanel {
         g.dispose();
     }
 
-    /** Shell in the air: a smoke trail, glowing embers and the muzzle ring at the start. */
     private void paintShellFlight(Graphics2D g, double seconds) {
         double p = Math.min(1, seconds / SHELL_FLIGHT_SECONDS);
         double x = effectFrom.x + (effectTo.x - effectFrom.x) * p;
@@ -552,7 +528,6 @@ public class BattlePanel extends OceanPanel {
         }
         g.translate(x, y);
         g.rotate(angle);
-        // shell body: flame at the tail, steel body, red nose and a violet band
         g.setColor(new Color(255, 136, 72));
         g.fillPolygon(new int[]{-21, -35, -21}, new int[]{-7, 0, 7}, 3);
         g.setColor(new Color(228, 237, 255));
@@ -563,7 +538,6 @@ public class BattlePanel extends OceanPanel {
         g.fillRect(-16, -11, 7, 22);
     }
 
-    /** Impact: water column and droplets for a miss, fireball and debris for a hit or a sinking. */
     private void paintImpact(Graphics2D g, double seconds) {
         double p = Math.min(1, (seconds - SHELL_FLIGHT_SECONDS) / (effectResult == ShotResult.SUNK ? .66 : .30));
         int x = effectTo.x, y = effectTo.y;
@@ -574,7 +548,6 @@ public class BattlePanel extends OceanPanel {
             g.setStroke(new BasicStroke((float) Math.max(1, 6 * (1 - p))));
             g.drawOval(x - radius, y - radius, radius * 2, radius * 2);
         }
-        // foam ring rolling outward on the surface
         int foam = (int) (p * (96 + 40 * Math.min(1, p)));
         g.setColor(new Color(236, 252, 255, (int) (190 * (1 - p))));
         g.setStroke(new BasicStroke((float) Math.max(1, 3.4 * (1 - p))));
@@ -659,8 +632,6 @@ public class BattlePanel extends OceanPanel {
         OceanScene.paintWaveRule(g, tx - 8, ty + 8, width + 16, seconds, Theme.SEA_FOAM, 0.55);
     }
 
-    // ------------------------------------------------------------------ end of match
-
     public void showGameOver(boolean iWon, int awardedPoints, String reason) {
         showGameOver(iWon, awardedPoints, reason, null, 0);
     }
@@ -673,15 +644,9 @@ public class BattlePanel extends OceanPanel {
         showGameOver(iWon, awardedPoints, reason, opponentFleet, opponentShots, 0);
     }
 
-    /**
-     * Ends the match with the full-screen result: the animated WIN / LOSE headline first, then both
-     * charts are thrown open with the released enemy fleet next to your own. The result stays
-     * modeless so the rematch offer, the exit button and the chat keep working while it plays.
-     */
     public void showGameOver(boolean iWon, int awardedPoints, String reason, List<Ship> opponentFleet, int opponentShots, long durationSeconds) {
         rematchAllowed = !"SURRENDER".equals(reason) && !"DISCONNECTED".equals(reason);
         if (animating) {
-            // the final explosion is still playing: open the result once it has landed
             finished = true;
             visualTimer.stop();
             btnFire.setEnabled(false);
@@ -704,7 +669,6 @@ public class BattlePanel extends OceanPanel {
             oppBoardGrid.revealFleet(opponentFleet);
         }
         revealedFleet = opponentFleet;
-        // the result screen covers the battle, so the combat screen's sea clock can rest
         disposeOcean();
         Window owner = SwingUtilities.getWindowAncestor(this);
         resultDialog = new JDialog(owner, "Battleship • Kết quả trận đấu", Dialog.ModalityType.MODELESS);

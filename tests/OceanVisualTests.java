@@ -15,11 +15,6 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Renders the sea-themed match screens and their entrance effect, and checks the animation
- * lifecycle: the effect must end by itself, never block combat, stop with the screen, and be
- * switchable from the UI.
- */
 public final class OceanVisualTests {
     private static final List<BufferedImage> INTRO_FRAMES = new ArrayList<>();
 
@@ -51,7 +46,6 @@ public final class OceanVisualTests {
         System.out.println("Sea screenshots: "+dir);
     }
 
-    // ------------------------------------------------------------------ combat screen
     private static void battleScreen(Path dir)throws Exception {
         List<Ship> myFleet=BotBrain.fleet(new Random(7));
         SwingSmoke.edt(()->{
@@ -72,7 +66,6 @@ public final class OceanVisualTests {
         SwingSmoke.edt(()->SwingSmoke.snapshotMinimum(window,dir.resolve("battle-small.png")));
         SwingSmoke.edt(()->{
             BoardGridPanel mine=(BoardGridPanel)field(battle,"myBoardGrid"),theirs=(BoardGridPanel)field(battle,"oppBoardGrid");
-            // a plausible half-played match on both boards
             List<Ship> fleet=BotBrain.fleet(new Random(7));
             for(Ship ship:fleet)for(Coordinate c:ship.getCoordinates())mine.setCellState(c.getX(),c.getY(),BoardGridPanel.CellState.SHIP);
             List<Coordinate> carrier=fleet.get(0).getCoordinates();
@@ -99,7 +92,6 @@ public final class OceanVisualTests {
         Thread.sleep(200);
         SwingSmoke.edt(()->SwingSmoke.snapshot(window,dir.resolve("no-minimap.png")));
         SwingSmoke.edt(()->{JCheckBox toggle=(JCheckBox)field(battle,"miniToggle");toggle.doClick();battle.setTurn(true,15);});
-        // shell flight and impact, sampled at exact effect times so the frames are reproducible
         SwingSmoke.edt(()->{battle.setTurn(true,15);battle.handleFireResult(true,new Coordinate(6,6),ShotResult.MISS,null,5,true);});
         List<BufferedImage> splash=new ArrayList<>();
         for(double moment:new double[]{0.06,0.16,0.28,0.38,0.46,0.56,0.64,0.72,0.80}) {
@@ -114,7 +106,6 @@ public final class OceanVisualTests {
         Thread.sleep(120);
         SwingSmoke.edt(()->{rewindEffect(battle,0.74);ImageIO.write(grabNow(window),"png",dir.resolve("ship-sunk.png").toFile());});
         SwingSmoke.waitFor(()->!battle.isAnimating(),"sunk effect ends");
-        // The server releases the enemy fleet with the end message: the result screen must open its charts.
         List<Ship> enemy=BotBrain.fleet(new Random(11));
         SwingSmoke.edt(()->battle.showGameOver(true,3,"ALL_SHIPS_DESTROYED",enemy,14,142));
         SwingSmoke.waitFor(()->field(battle,"resultDialog")!=null,"result dialog opens");
@@ -145,7 +136,6 @@ public final class OceanVisualTests {
         SwingSmoke.edt(()->{try{SwingSmoke.snapshot((Component)field(battle,"resultDialog"),dir.resolve("result.png"));}catch(Exception e){throw new RuntimeException(e);}});
         SwingSmoke.edt(()->battle.disposePanel());
         SwingSmoke.edt(()->{window.dispose();window=null;battle=null;});
-        // A defeat must read as clearly as a victory.
         SwingSmoke.edt(()->{
             window=new JFrame("Battleship • Thất bại");
             battle=new BattlePanel("gui_a","gui_b",myFleet,new BattlePanel.BattleActionListener(){
@@ -160,7 +150,6 @@ public final class OceanVisualTests {
         SwingSmoke.edt(()->{battle.disposePanel();window.dispose();window=null;battle=null;});
     }
 
-    // ------------------------------------------------------------------ deployment screen
     private static void placementScreen(Path dir)throws Exception {
         SwingSmoke.edt(()->{
             window=new JFrame("Battleship • Triển khai hạm đội");
@@ -185,11 +174,9 @@ public final class OceanVisualTests {
         SwingSmoke.edt(()->{placement=null;window.dispose();window=null;});
     }
 
-    // ------------------------------------------------------------------ match history
     private static void historyDialog(Path dir)throws Exception {
         final java.util.Map<String,Object> data=sampleHistory();
         final List<String> requested=new ArrayList<>();
-        // a modal dialog blocks its dispatch thread, so it is opened from invokeLater
         SwingUtilities.invokeLater(()->{
             MatchHistoryDialog dialog=new MatchHistoryDialog(null,data,requested::add);
             historyDialog=dialog;
@@ -203,10 +190,8 @@ public final class OceanVisualTests {
             check("—".equals(historyDialog.rows().getValueAt(7,7)),"rows without stored fleets offer nothing to replay");
             SwingSmoke.snapshot(historyDialog,dir.resolve("match-history.png"));
         });
-        // one click on a row asks the server for that very match
         SwingSmoke.edt(()->{clickRow(historyDialog,0);});
         check(requested.size()==1&&"M_sample_0".equals(requested.get(0)),"a click opens the replay of that match");
-        // a match recorded before the feature explains itself instead of asking the server
         SwingSmoke.edt(()->clickRow(historyDialog,7));
         check(requested.size()==1,"a row without stored fleets never asks the server");
         SwingSmoke.edt(()->{historyDialog.dispose();historyDialog=null;});
@@ -232,7 +217,6 @@ public final class OceanVisualTests {
             row.put("shots",18+i*3);row.put("duration_seconds",120+i*37);row.put("reason",reasons[i]);
             row.put("ended_at_ms",base-(long)i*5_400_000L);
             row.put("match_id","M_sample_"+i);
-            // the two oldest rows predate the replay feature, like real stored data
             row.put("replay",i<6);
             rows.add(row);
         }
@@ -240,13 +224,10 @@ public final class OceanVisualTests {
         return data;
     }
 
-    // ------------------------------------------------------------------ replay screen
-    /** The replay of one match: both sealed fleets plus the shot log, driven shot by shot. */
     private static void replayScreen(Path dir)throws Exception {
         List<Ship> mine=BotBrain.fleet(new Random(21)),theirs=BotBrain.fleet(new Random(22));
         List<Object> log=new ArrayList<>();
         Set<String> fired=new HashSet<>();
-        // my shots: the first enemy ship goes down, then two shots into empty water
         List<Coordinate> victim=theirs.get(0).getCoordinates();
         for(int i=0;i<victim.size();i++){
             boolean last=i==victim.size()-1;
@@ -257,7 +238,6 @@ public final class OceanVisualTests {
             if(occupied(theirs,x,y)||!fired.add(x+":"+y))continue;
             log.add(shot(20+misses,7,new Coordinate(x,y),"MISS",null));misses++;
         }
-        // the enemy answers by hitting two cells of my second ship
         List<Coordinate> myHits=mine.get(1).getCoordinates();
         for(int i=0;i<2;i++)log.add(shot(30+i,9,myHits.get(i),"HIT",null));
         Map<String,Object> data=sampleReplay(mine,theirs,log);
@@ -270,10 +250,8 @@ public final class OceanVisualTests {
             for(Coordinate c:victim)check(replayDialog.enemyBoard().getCellState(c.getX(),c.getY())==BoardGridPanel.CellState.SUNK,"replayed enemy chart shows the sunk ship");
             for(int i=0;i<2;i++)check(replayDialog.myBoard().getCellState(myHits.get(i).getX(),myHits.get(i).getY())==BoardGridPanel.CellState.HIT,"replayed own chart shows the enemy hits");
             for(Ship ship:mine)for(Coordinate c:ship.getCoordinates())check(replayDialog.myBoard().getCellState(c.getX(),c.getY())!=BoardGridPanel.CellState.WATER,"own fleet is drawn on the replayed chart");
-            // an untouched ship stays a hull, proving the marks are layered over the fleets
             for(Coordinate c:theirs.get(4).getCoordinates())check(replayDialog.enemyBoard().getCellState(c.getX(),c.getY())==BoardGridPanel.CellState.SHIP,"untouched ships stay visible on the replayed chart");
             SwingSmoke.snapshot(replayDialog,dir.resolve("match-replay.png"));
-            // stepping back through the log rebuilds both charts up to that shot
             replayDialog.shots().setSelectedIndex(2);
         });
         SwingSmoke.edt(()->{
@@ -320,8 +298,6 @@ public final class OceanVisualTests {
         return list;
     }
 
-    // ------------------------------------------------------------------ settings screen
-    /** Volume sliders must reach the audio engine, and the dialog must stay reusable. */
     private static void settingsScreen(Path dir)throws Exception {
         float master=GameAudio.getMasterVolume();
         SwingSmoke.edt(()->SettingsDialog.open(null));
@@ -341,7 +317,6 @@ public final class OceanVisualTests {
             SwingSmoke.snapshot(dialog,dir.resolve("settings.png"));
             dialog.dispose();
         });
-        // a disposed window stays in Window.getWindows() until it is collected, so only visibility is checked
         SwingSmoke.waitFor(()->{for(Window w:Window.getWindows())if(w instanceof SettingsDialog && w.isShowing())return false;return true;},"settings closed");
         SwingSmoke.edt(()->{GameAudio.setMasterVolume(master);check(Math.abs(GameAudio.getMasterVolume()-master)<.01f,"master volume restored after the test");});
     }
@@ -358,7 +333,6 @@ public final class OceanVisualTests {
         }
     }
 
-    // ------------------------------------------------------------------ lifecycle checks
     private static void animationLifecycle(Path dir)throws Exception {
         SwingSmoke.edt(()->{
             window=new JFrame("Battleship • Kiểm thử hiệu ứng");
@@ -400,13 +374,11 @@ public final class OceanVisualTests {
         Field timer=type.getDeclaredField("seaTimer");timer.setAccessible(true);return (javax.swing.Timer)timer.get(panel);
     }
 
-    // ------------------------------------------------------------------ helpers
     private static void log(BattlePanel panel,String... lines)throws Exception {
         java.lang.reflect.Method method=BattlePanel.class.getDeclaredMethod("log",String.class);
         method.setAccessible(true);
         for(String line:lines)method.invoke(panel,line);
     }
-    /** Rewinds the shell clock so a frame can be sampled at an exact moment of the effect. */
     private static void rewindEffect(BattlePanel panel,double seconds)throws Exception {
         Field started=BattlePanel.class.getDeclaredField("effectStarted");
         started.setAccessible(true);
@@ -421,13 +393,11 @@ public final class OceanVisualTests {
         SwingSmoke.edt(()->image.set(grabNow(frame)));
         return image.get();
     }
-    /** Same as {@link #grab}, for dialogs: a heavyweight window must be captured on the EDT. */
     private static BufferedImage grabWindow(Window window)throws Exception {
         AtomicReference<BufferedImage> image=new AtomicReference<>();
         SwingSmoke.edt(()->image.set(grabNow(window)));
         return image.get();
     }
-    /** Compares a coarse grid of pixels: enough to tell "frozen" from "moving" without noise. */
     private static boolean similar(BufferedImage a,BufferedImage b) {
         long difference=0;int samples=0;
         for(int y=0;y<a.getHeight();y+=13)for(int x=0;x<a.getWidth();x+=13) {

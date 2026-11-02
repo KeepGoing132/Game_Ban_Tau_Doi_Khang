@@ -11,7 +11,6 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
 
-/** A collapsible overlay: opening chat never resizes either battle map. */
 public final class ChatPanel extends Theme.RoundedPanel {
     public interface Actions {
         void select(int id);
@@ -20,7 +19,6 @@ public final class ChatPanel extends Theme.RoundedPanel {
         void opened();
     }
 
-    /** One entry of the recipient list. */
     public static final class Peer {
         public final int id;
         public final String label;
@@ -136,7 +134,6 @@ public final class ChatPanel extends Theme.RoundedPanel {
                 int room = MAX_BODY_LENGTH - fb.getDocument().getLength() + length;
                 if (clean.length() > room) {
                     clean = clean.substring(0, Math.max(0, room));
-                    // never cut a surrogate pair in half
                     if (!clean.isEmpty() && Character.isHighSurrogate(clean.charAt(clean.length() - 1))) {
                         clean = clean.substring(0, clean.length() - 1);
                     }
@@ -191,10 +188,6 @@ public final class ChatPanel extends Theme.RoundedPanel {
         setVisible(true);
     }
 
-    /**
-     * Docks the floating window into the frame's layered pane. The original layout manager is kept
-     * and wrapped, so positioning the chat never disturbs the frame's own layout.
-     */
     public void attach(JFrame frame) {
         JLayeredPane next = frame.getLayeredPane();
         if (host == next) {
@@ -255,7 +248,6 @@ public final class ChatPanel extends Theme.RoundedPanel {
         host = null;
     }
 
-    /** Bottom-right dock; collapsed it is just the title bar. */
     private void position() {
         if (host == null) {
             return;
@@ -336,7 +328,6 @@ public final class ChatPanel extends Theme.RoundedPanel {
         status.setForeground(error ? Theme.DANGER : Theme.TEXT_MUTED);
     }
 
-    /** Renders the whole conversation; the scroll position is kept unless asked otherwise. */
     public void showMessages(Collection<Map<String, Object>> rows, int ownId, boolean hasMore, boolean loading,
                              boolean scrollDown, boolean prepend) {
         JScrollBar bar = history.getVerticalScrollBar();

@@ -28,7 +28,6 @@ public class RaceTests {
         try(SocketPeer a=new SocketPeer(port,true);SocketPeer b=new SocketPeer(port,true);SocketPeer c=new SocketPeer(port,true);SocketPeer d=new SocketPeer(port,true)){
             List<Message> logins=together(new SocketPeer[]{a,b},new Message[]{login("race"),login("RACE")});check(logins.stream().filter(m->"SUCCESS".equals(m.getStatus())).count()==1,"one owner concurrent duplicate login");
             SocketPeer owner="SUCCESS".equals(logins.get(0).getStatus())?a:b,second=owner==a?b:a;owner.userId=JsonUtil.requireInt(logins.get(owner==a?0:1).getData(),"user_id");second.login("second");c.login("third");d.login("fourth");
-            // Keep explicitly assigned IDs from the successful login, rather than deriving identity from presence.
             a.userId=a==owner?owner.userId:second.userId;b.userId=b==owner?owner.userId:second.userId;
             String room=(String)IntegrationTests.ok(a,new Message(MessageType.CREATE_ROOM_REQ)).getData().get("room_id");
             List<Message> joins=together(new SocketPeer[]{b,c},new Message[]{new Message(MessageType.JOIN_ROOM_REQ).put("room_code",room),new Message(MessageType.JOIN_ROOM_REQ).put("room_code",room)});
@@ -46,7 +45,6 @@ public class RaceTests {
             for(Map.Entry<String,List<SocketPeer>> entry:groups.entrySet())leave(entry.getValue().get(0),entry.getKey());clean(a,b,c,d);
             String id=IntegrationTests.queuePair(a,b);IntegrationTests.ok(a,IntegrationTests.match(MessageType.PLACE_SHIPS_REQ,id).put("ships",IntegrationTests.fleet()));IntegrationTests.ok(b,IntegrationTests.match(MessageType.PLACE_SHIPS_REQ,id).put("ships",IntegrationTests.fleet()));
             together(new SocketPeer[]{a,b},new Message[]{IntegrationTests.ready(id,true),IntegrationTests.ready(id,true)});a.waitType(MessageType.MATCH_START);b.waitType(MessageType.MATCH_START);
-            // A non-reading socket fills only its own bounded write queue.
             try(Socket slow=new Socket("127.0.0.1",port)){
                 slow.setReceiveBufferSize(1024);
                 Thread flood=new Thread(()->{try{StringBuilder text=new StringBuilder(login("slow").toJson()+"\n");for(int n=0;n<8000;n++)text.append(new Message(MessageType.GET_ONLINE_USERS_REQ).requestId("flood-"+n).toJson()).append('\n');slow.getOutputStream().write(text.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));slow.getOutputStream().flush();}catch(Exception ignored){}},"slow-peer-flood");flood.setDaemon(true);flood.start();
@@ -56,10 +54,7 @@ public class RaceTests {
             }
             a.close();Message ended=b.waitType(MessageType.MATCH_END);check("DISCONNECTED".equals(ended.getData().get("reason")),"disconnect distinct from surrender");b.waitType(MessageType.ROOM_USER_LEFT);check(server.getStorage().getMatchRecords().size()==1,"disconnect awards once");
             clean(b,c,d);String post=IntegrationTests.queuePair(c,d);IntegrationTests.start(c,d,post);
-            // Sink via surrender-like direct disconnect is already checked; normal game end retains post-game state.
-            // Domain final-shot is covered in IntegrationTests; use a full fleet here for post-game expiry.
             Message online=IntegrationTests.ok(c,new Message(MessageType.GET_ONLINE_USERS_REQ));
-            // Close d in PLACING is separately checked by queue cleanup below.
             IntegrationTests.ok(c,IntegrationTests.match(MessageType.SURRENDER_REQ,post));c.waitType(MessageType.ROOM_USER_LEFT);d.waitType(MessageType.ROOM_USER_LEFT);
             clockOffset.addAndGet(GameConfig.MATCHMAKING_PENALTY_MS);
             try(SocketPeer dead=new SocketPeer(port,true)){dead.login("queue_dead");IntegrationTests.ok(dead,new Message(MessageType.QUEUE_JOIN_REQ));dead.close();b.waitFor(m->m.getType()==MessageType.USER_STATUS_BROADCAST && "queue_dead".equals(m.getData().get("username")) && "OFFLINE".equals(m.getData().get("status")),5000);}

@@ -4,7 +4,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.geom.*;
 
-/** Resolution-independent tactical illustration, painted locally with Java2D. */
 public final class NavalArt extends JComponent {
     private static final int ART_WIDTH = 440;
     private static final int ART_HEIGHT = 340;
@@ -17,7 +16,6 @@ public final class NavalArt extends JComponent {
     @Override
     protected void paintComponent(Graphics graphics) {
         Graphics2D g = Theme.graphics(graphics);
-        // the drawing is authored in a 440x340 box and scaled to whatever space is available
         double scale = Math.min(getWidth() / (double) ART_WIDTH, getHeight() / (double) ART_HEIGHT);
         g.translate((getWidth() - ART_WIDTH * scale) / 2, (getHeight() - ART_HEIGHT * scale) / 2);
         g.scale(scale, scale);
@@ -59,7 +57,6 @@ public final class NavalArt extends JComponent {
         g.drawLine(cx, 0, cx, 329);
     }
 
-    /** Own ship, drawn on a rotated axis so the chart reads like a head-up display. */
     private void paintHull(Graphics2D g, int cx, int cy) {
         g.rotate(-.54, cx, cy);
         Path2D hull = new Path2D.Double();

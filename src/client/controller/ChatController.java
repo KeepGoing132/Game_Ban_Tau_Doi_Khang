@@ -6,9 +6,7 @@ import javax.swing.*;
 import java.util.*;
 import java.util.function.Consumer;
 
-/** Session-scoped chat state, shared by the lobby, deployment and battle windows. */
 public final class ChatController implements ChatPanel.Actions {
-    /** One conversation: draft, request state, unread counter and the messages loaded so far. */
     private static final class Conversation {
         final int id;
         final TreeMap<Long, Map<String, Object>> messages = new TreeMap<>();
@@ -31,7 +29,6 @@ public final class ChatController implements ChatPanel.Actions {
         }
     }
 
-    /** A request in flight: which peer it targeted and the body it carried. */
     private static final class Request {
         final int peer;
         final String body;
@@ -69,7 +66,6 @@ public final class ChatController implements ChatPanel.Actions {
         send.accept(new Message(MessageType.CHAT_CONVERSATIONS_REQ));
     }
 
-    /** Finds the conversation of one peer, creating it on first use. */
     private Conversation peer(int id, String name) {
         Conversation conversation = conversations.get(id);
         if (conversation == null) {
@@ -81,7 +77,6 @@ public final class ChatController implements ChatPanel.Actions {
         return conversation;
     }
 
-    /** Opens the window for one peer, e.g. from the lobby buttons. */
     public void open(int id, String name) {
         if (id <= 0 || id == ownId) {
             return;
@@ -92,7 +87,6 @@ public final class ChatController implements ChatPanel.Actions {
         panel.focusInput();
     }
 
-    /** Points the collapsed window at the opponent when a match starts. */
     public void opponent(int id, String name) {
         if (id <= 0) {
             return;
@@ -191,7 +185,6 @@ public final class ChatController implements ChatPanel.Actions {
         }
         conversation.draft = text;
         if (!conversation.retryBody.equals(body)) {
-            // a retry of the same text reuses the client message id, so the server never stores it twice
             conversation.retryBody = body;
             conversation.retryId = UUID.randomUUID().toString();
         }
@@ -207,7 +200,6 @@ public final class ChatController implements ChatPanel.Actions {
         refresh(false);
     }
 
-    /** Files one received/stored message; returns true when it had not been seen before. */
     private boolean add(Map<String, Object> message, boolean incoming) {
         int sender = JsonUtil.getInt(message, "sender_id", -1);
         int recipient = JsonUtil.getInt(message, "recipient_id", -1);
@@ -225,7 +217,6 @@ public final class ChatController implements ChatPanel.Actions {
         return fresh;
     }
 
-    /** Handles every chat message; returns false for message types chat does not own. */
     public boolean handle(Message msg) {
         MessageType type = msg.getType();
         if (type != MessageType.CHAT_SEND_RESP && type != MessageType.CHAT_MSG
@@ -311,7 +302,6 @@ public final class ChatController implements ChatPanel.Actions {
         refresh(scrollDown, false);
     }
 
-    /** Pushes the whole chat state into the panel: contacts, header, composer and messages. */
     private void refresh(boolean scrollDown, boolean prepend) {
         List<ChatPanel.Peer> choices = new ArrayList<>();
         int unread = 0;

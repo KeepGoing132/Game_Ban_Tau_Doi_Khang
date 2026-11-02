@@ -10,7 +10,6 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarFile;
 
-/** Runs the shipped server JAR from another directory and the client from its isolated JAR. */
 public final class PackageSmoke {
     public static void run(Path distribution) throws Exception {
         Path serverJar=distribution.resolve("battleship-server.jar").toAbsolutePath();

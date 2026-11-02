@@ -6,11 +6,6 @@ import java.awt.*;
 
 import java.util.prefs.Preferences;
 
-/**
- * Volume and comfort settings: master, effects and sea-ambience levels plus the sound, wave and
- * minimap switches. Every change applies immediately (and to the screens already open) and is
- * stored in the user preferences, so the next launch starts the same way.
- */
 public class SettingsDialog extends JDialog {
     private static final Preferences BATTLE_PREF = Preferences.userNodeForPackage(BattlePanel.class);
 
@@ -85,7 +80,6 @@ public class SettingsDialog extends JDialog {
         getRootPane().registerKeyboardAction(e -> dispose(), KeyStroke.getKeyStroke("ESCAPE"), JComponent.WHEN_IN_FOCUSED_WINDOW);
     }
 
-    /** Volume sliders play a soft cue while dragging, so the level is audible right away. */
     private long lastPreview;
     private void preview(JSlider slider) {
         if (!slider.getValueIsAdjusting()) return;
@@ -120,7 +114,6 @@ public class SettingsDialog extends JDialog {
         return row;
     }
 
-    /** One pass over the open windows keeps the sea and minimap switches in sync everywhere. */
     private static void walk(boolean animated, boolean minimap) {
         for (Window window : Window.getWindows()) apply(window, animated, minimap);
     }

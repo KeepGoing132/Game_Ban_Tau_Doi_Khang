@@ -23,7 +23,6 @@ public final class FeatureTests {
                 IntegrationTests.error(player,new Message(MessageType.DELETE_ACCOUNT_REQ).put("password","secret"),"INVALID_STATE");
                 IntegrationTests.ok(player,IntegrationTests.match(MessageType.PLACE_SHIPS_REQ,id).put("ships",IntegrationTests.fleet()));IntegrationTests.ok(player,IntegrationTests.ready(id,true));
                 player.waitType(MessageType.MATCH_START);
-                // If human moves first, the real turn timeout hands the turn to the bot.
                 Message shot=player.waitFor(m->m.getType()==MessageType.FIRE_RESULT && JsonUtil.getInt(m.getData(),"shooter_id",0)<0,common.config.GameConfig.TURN_TIMEOUT_MS+5000);
                 Map<String,Object> c=JsonUtil.getMap(shot.getData(),"coordinate");check(JsonUtil.getInt(c,"x",-1)>=0&&JsonUtil.getInt(c,"x",-1)<10,"bot fires legal coordinates through server");
                 IntegrationTests.ok(player,IntegrationTests.match(MessageType.SURRENDER_REQ,id));player.waitType(MessageType.MATCH_END);player.waitType(MessageType.ROOM_USER_LEFT);

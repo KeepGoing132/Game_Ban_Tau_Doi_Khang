@@ -8,7 +8,6 @@ import java.security.MessageDigest;
 import java.util.*;
 import java.util.prefs.*;
 
-/** Five local slots, isolated by endpoint and immutable account id. No credentials are stored. */
 public final class FleetPresets {
     private final Preferences preferences;
     public FleetPresets(String endpoint, int accountId) {

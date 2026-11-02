@@ -8,14 +8,7 @@ import java.awt.geom.*;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * End-of-match screen. A huge animated WIN / LOSE headline slams onto the deck over the living sea,
- * then the two charts are thrown open: your own waters with the enemy shots, and the enemy waters
- * with yours. Everything here is drawn from one timeline value, so the whole scene can be sampled
- * at any moment and the animation never blocks the buttons.
- */
 public class MatchResultView extends OceanPanel {
-    /** Headline letters land one by one, then the charts unfold. */
     private static final double UNFOLD_START = 1.55, UNFOLD_SECONDS = 1.15;
     private static final double FLASH_WINDOW = 0.55;
     private static final double SETTLE_SECONDS = 16.0;
@@ -45,7 +38,6 @@ public class MatchResultView extends OceanPanel {
         this.won = won; this.myName = myName; this.oppName = oppName; this.reason = reason;
         this.awarded = awardedPoints; this.myShots = myShots; this.myHits = myHits; this.oppShots = oppShots;
         this.durationSeconds = durationSeconds; this.myFleet = myFleet; this.enemyFleet = enemyFleet;
-        // the battle screen already played the cast-off effect; this screen opens on its own headline
         finishIntro();
         setBorder(new EmptyBorder(16, 20, 14, 20));
 
@@ -72,7 +64,6 @@ public class MatchResultView extends OceanPanel {
         lblHint = Theme.label(won ? "Xuất sắc, chỉ huy! Chơi thêm một ván, hay trở về phòng chỉ huy?" : "Đừng nản lòng. Chơi lại để phục thù, hay trở về phòng chỉ huy?", Theme.FONT_SMALL, new Color(206, 228, 242));
         JPanel footer = Theme.transparent(new BorderLayout(16, 0));
         JPanel legend = Theme.transparent(new FlowLayout(FlowLayout.LEFT, 16, 4));
-        // plain symbols only: the UI font has no glyphs for the outline marks
         legend.add(Theme.badge("×  TRÚNG ĐÍCH", Theme.CORAL));
         legend.add(Theme.badge("○  BẮN TRƯỢT", Theme.AZURE));
         legend.add(Theme.badge("●  ĐÃ CHÌM", Theme.ORCHID));
@@ -94,10 +85,8 @@ public class MatchResultView extends OceanPanel {
     public JButton exitButton() { return btnExit; }
     public JLabel hintLabel() { return lblHint; }
     public void setHint(String text) { lblHint.setText(text); }
-    /** The two after-action charts; used by the GUI tests. */
     public BoardGridPanel myChart() { return myChart; }
     public BoardGridPanel enemyChart() { return enemyChart; }
-    /** Result facts shown on the banner; used by the GUI tests. */
     public boolean won() { return won; }
     public int awardedPoints() { return awarded; }
     public void setAwardedPoints(int value) {
@@ -106,7 +95,6 @@ public class MatchResultView extends OceanPanel {
     }
     public int myShots() { return myShots; }
     public int myHits() { return myHits; }
-    /** True while the charts are still unfolding; used by the tests. */
     public boolean isUnfolding() { return unfold < 1; }
 
     private JPanel chips() {
@@ -120,7 +108,6 @@ public class MatchResultView extends OceanPanel {
         return chips;
     }
 
-    /** One chart with its own caption, mirrored from the live board so every mark is kept. */
     private JPanel chart(BoardGridPanel grid, String caption, List<Ship> fleet) {
         JPanel wrap = Theme.transparent(new BorderLayout(0, 6));
         wrap.add(grid, BorderLayout.CENTER);
@@ -149,7 +136,6 @@ public class MatchResultView extends OceanPanel {
     private void tick() {
         double t = elapsed();
         if (unfold < 1 && t >= UNFOLD_START) unfold = Math.min(1, (t - UNFOLD_START) / UNFOLD_SECONDS);
-        // once the charts are open the frame only carries confetti and rain, so it can slow down
         int delay = t < UNFOLD_START + UNFOLD_SECONDS + 0.6 ? 26 : 55;
         if (effectTimer.getDelay() != delay) effectTimer.setDelay(delay);
         repaint();
@@ -160,7 +146,6 @@ public class MatchResultView extends OceanPanel {
     @Override public void removeNotify() { effectTimer.stop(); super.removeNotify(); }
     @Override public void disposeOcean() { effectTimer.stop(); super.disposeOcean(); }
 
-    // ---------------------------------------------------------------- painted effects
     @Override protected void paintChildren(Graphics graphics) {
         super.paintChildren(graphics);
         if (getWidth() < 40 || getHeight() < 40) return;
@@ -214,7 +199,6 @@ public class MatchResultView extends OceanPanel {
         OceanScene.paintBubbles(g, w, h + 30, h * 0.35, t * 0.7, 14, 0.16, 611);
     }
 
-    /** The headline word, animated letter by letter over a burst of light. */
     private class Headline extends JComponent {
         @Override public Dimension getPreferredSize() { return new Dimension(460, 128); }
         @Override protected void paintComponent(Graphics graphics) {
@@ -248,7 +232,6 @@ public class MatchResultView extends OceanPanel {
                 gl.translate(x + letterWidth / 2.0, baseline - (1 - appear) * 96);
                 gl.rotate((1 - appear) * -0.30);
                 gl.scale(scale, scale);
-                // dark drop shadow, then a soft glow, then the gradient face
                 gl.setColor(new Color(3, 12, 28, (int) (200 * appear)));
                 gl.drawString(letter, -letterWidth / 2 + 3, 3);
                 gl.setColor(new Color(top.getRed(), top.getGreen(), top.getBlue(), (int) (70 * appear)));
@@ -266,7 +249,6 @@ public class MatchResultView extends OceanPanel {
                 }
                 gl.dispose();
             }
-            // subtitle under the word
             if (t > 0.75) {
                 double appear = OceanScene.clamp01((t - 0.75) / 0.5);
                 Font subFont = Theme.FONT_HEADER.deriveFont(Font.BOLD, Math.max(13f, size * 0.20f));
@@ -287,7 +269,6 @@ public class MatchResultView extends OceanPanel {
             }
             g.dispose();
         }
-        /** Rotating rays behind a victory. */
         private void paintSunburst(Graphics2D g, int w, int h, double t) {
             double appear = OceanScene.clamp01((t - 0.05) / 0.9);
             double cx = w / 2.0, cy = h / 2.0, radius = Math.max(w, h) * 0.72;
@@ -306,7 +287,6 @@ public class MatchResultView extends OceanPanel {
             OceanScene.paintSonar(g, cx, cy, Math.max(w, h) * 0.42, t - 0.1, 1.5, Theme.MINT, 3, 0.22 * (1 - OceanScene.clamp01(t / 4.0)));
             paintSailingShip(g, w, h, t, appear);
         }
-        /** The winning hull sailing out of the burst. */
         private void paintSailingShip(Graphics2D g, int w, int h, double t, double appear) {
             if (appear < 1) return;
             double sail = OceanScene.clamp01((t - 1.0) / 2.4);
@@ -317,7 +297,6 @@ public class MatchResultView extends OceanPanel {
                 g.fill(new Ellipse2D.Double(x - 12 - i * 6, y + 3 + Math.sin(t * 2 + i) * 1.2, 4 - i * 0.4, 2));
             }
         }
-        /** A dimming sea, for the lost match. */
         private void paintDim(Graphics2D g, int w, int h, double t) {
             double appear = OceanScene.clamp01((t - 0.05) / 1.0);
             g.setPaint(new RadialGradientPaint(new Point2D.Double(w / 2.0, h / 2.0), Math.max(w, h) * 0.62f,
@@ -334,7 +313,6 @@ public class MatchResultView extends OceanPanel {
         }
     }
 
-    /** Holds the two charts and throws them open line by line. */
     private class UnfoldHost extends JPanel {
         UnfoldHost() { super(new GridLayout(1, 2, 14, 0)); setOpaque(false); }
         @Override public void paint(Graphics graphics) {

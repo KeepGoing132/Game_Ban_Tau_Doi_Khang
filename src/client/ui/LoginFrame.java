@@ -77,7 +77,6 @@ public class LoginFrame extends JFrame {
         JPanel p = Theme.stack();Theme.addStack(p,Theme.label(value,Theme.FONT_HEADER,accent),4);
         Theme.addStack(p,Theme.muted(title),0);return p;
     }
-    /** Login backdrop: soft colour fields instead of a flat dark fill. */
     private static class ColorfulBackdrop extends JPanel {
         ColorfulBackdrop(LayoutManager layout) { super(layout); setOpaque(false); }
         @Override protected void paintComponent(Graphics graphics) {

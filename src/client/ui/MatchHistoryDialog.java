@@ -15,11 +15,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * Match history of one commander: result, opponent, points, shots, duration and how the match
- * ended. Opened from the lobby for the logged-in player or for a selected opponent. Clicking a row
- * of one of the player's own matches asks the server for the full replay (both fleets, shot log).
- */
 public class MatchHistoryDialog extends JDialog {
     private static final SimpleDateFormat WHEN = new SimpleDateFormat("dd/MM/yyyy HH:mm");
     private final JTable table;
@@ -48,7 +43,6 @@ public class MatchHistoryDialog extends JDialog {
         this(parent, data, null);
     }
 
-    /** {@code onReplay} receives the match_id of the clicked row; null disables the replay link. */
     public MatchHistoryDialog(Window parent, Map<String, Object> data, java.util.function.Consumer<String> onReplay) {
         super(parent, "Battleship • Lịch sử đấu", ModalityType.MODELESS);
         this.onReplay = onReplay;
@@ -114,7 +108,6 @@ public class MatchHistoryDialog extends JDialog {
                 }
             }
         });
-        // one click on a row opens the replay of that match
         table.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) { openSelected(); }
         });
@@ -216,9 +209,7 @@ public class MatchHistoryDialog extends JDialog {
         } catch (RuntimeException e) { showStatus("Ngày cần đúng dd/MM/yyyy; ngày bắt đầu không sau ngày kết thúc."); }
     }
 
-    /** Rows currently shown; used by the GUI tests. */
     public JTable rows() { return table; }
-    /** Shows a server-side notice about the clicked row, e.g. a match without stored fleets. */
     public void showStatus(String text) { lblStatus.setText(text == null ? " " : "<html>" + Theme.html(text) + "</html>"); }
 
     private void openSelected() {

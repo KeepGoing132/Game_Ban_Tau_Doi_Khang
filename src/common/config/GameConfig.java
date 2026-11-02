@@ -3,7 +3,7 @@ package common.config;
 public class GameConfig {
     public static final int DEFAULT_PORT = 8888;
     public static final String DEFAULT_HOST = "localhost";
-    
+
     public static final int BOARD_SIZE = 10;
     public static final int TURN_TIMEOUT_SECONDS = 15;
     public static final long TURN_TIMEOUT_MS = Long.getLong("battleship.turn_ms", 15000L);
@@ -20,14 +20,12 @@ public class GameConfig {
         if (TURN_TIMEOUT_MS<=0 || PLACEMENT_TIMEOUT_MS<=0 || SLOW_CONNECTION_MS<=0 || HEARTBEAT_INTERVAL_MS<=0 || HEARTBEAT_TIMEOUT_MS<=0 || INVITE_TIMEOUT_MS<=0 || REMATCH_TIMEOUT_MS<=0)
             throw new IllegalArgumentException("Battleship timing properties must be positive");
     }
-    
+
     public static final int WIN_POINTS = 3;
     public static final int LOSE_POINTS = 0;
     public static final int FORFEIT_PENALTY_POINTS = 3;
     public static final long MATCHMAKING_PENALTY_MS = 60_000L;
-    
-    // Tổng cộng 5 tàu, 17 ô
-    // 1 tàu 5 ô, 1 tàu 4 ô, 2 tàu 3 ô, 1 tàu 2 ô
+
     public static final int[] SHIP_SIZES = {5, 4, 3, 3, 2};
     public static final String[] SHIP_NAMES = {
         "Carrier (5 ô)",

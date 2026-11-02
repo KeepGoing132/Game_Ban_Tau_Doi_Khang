@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Podium and full ranking table, opened from the lobby. */
 public class LeaderboardDialog extends JDialog {
     private static final Color[] MEDALS = {Theme.GOLD, new Color(212, 224, 240), new Color(226, 150, 110)};
     private static final String[] MEDAL_NAMES = {"DẪN ĐẦU", "BÁM ĐUỔI", "BỆ PHÓNG"};

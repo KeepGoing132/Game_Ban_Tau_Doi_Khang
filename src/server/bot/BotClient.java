@@ -9,7 +9,6 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/** Virtual connection participating in the same authoritative match state machine. */
 public final class BotClient extends ClientHandler {
     private static final AtomicInteger IDS=new AtomicInteger(-100);
     private final MatchManager matches;

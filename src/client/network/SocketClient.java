@@ -8,19 +8,11 @@ import java.util.UUID;
 import java.util.concurrent.*;
 import javax.swing.SwingUtilities;
 
-/**
- * Owns the socket, the reader thread, the heartbeat and the connection generation.
- *
- * <p>Every callback is routed through {@link #dispatch}, which drops anything produced by a
- * previous connection: a reconnect therefore never resurrects callbacks of the session it
- * replaced. The heartbeat also measures the round-trip time the UI shows as the link state.</p>
- */
 public class SocketClient {
     private final ServerListener listener;
     private volatile Session current;
     private volatile long generation;
 
-    /** One live connection: its own generation token, wire, heartbeat clock and last measurement. */
     private static final class Session {
         final long generation;
         final LineConnection wire;
@@ -48,7 +40,6 @@ public class SocketClient {
         this.listener = listener;
     }
 
-    /** Opens a connection; false means the server could not be reached. */
     public boolean connect(String host, int port) {
         final long token;
         final Session previous;
@@ -66,7 +57,6 @@ public class SocketClient {
             Session session = new Session(token, new LineConnection(socket));
             synchronized (this) {
                 if (generation != token) {
-                    // a newer connection was requested while this one was still dialling
                     session.close();
                     return false;
                 }
@@ -87,13 +77,11 @@ public class SocketClient {
             try {
                 socket.close();
             } catch (IOException ignored) {
-                // the socket never opened
             }
             return false;
         }
     }
 
-    /** Delivers a callback only while the session it belongs to is still the current one. */
     private void dispatch(Session session, Runnable action) {
         SwingUtilities.invokeLater(() -> {
             if (current == session && generation == session.generation) {
@@ -115,7 +103,6 @@ public class SocketClient {
                     dispatch(session, () -> listener.onMessageReceived(message));
                     continue;
                 }
-                // only the echo of the last heartbeat counts, so a late answer cannot skew the figure
                 if (message.getRequestId() != null && message.getRequestId().equals(session.heartbeatId)) {
                     long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - session.heartbeatSentNanos);
                     session.heartbeatId = null;
@@ -123,7 +110,6 @@ public class SocketClient {
                 }
             }
         } catch (IOException | IllegalArgumentException e) {
-            // malformed frames and EOF both end this connection; the UI is told below
         } finally {
             lost(session, "Mất kết nối với máy chủ");
         }

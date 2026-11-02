@@ -12,7 +12,6 @@ import java.nio.file.*;
 import java.sql.*;
 import java.util.*;
 
-/** Real clients, widgets and sockets; temporary accounts/database only. */
 public final class ChatSwingTests {
     private static Object field(Object o,String name)throws Exception{return SwingSmoke.field(o,name);}
     private static ChatPanel panel(ClientController c)throws Exception{return (ChatPanel)field(field(c,"chat"),"panel");}
@@ -58,7 +57,6 @@ public final class ChatSwingTests {
                 Dimension original=window.getSize();window.setSize(window.getMinimumSize());window.validate();Rectangle bounds=panel(a).getBounds();check(bounds.x>=0&&bounds.x+bounds.width<=window.getLayeredPane().getWidth()&&bounds.y+bounds.height<=window.getLayeredPane().getHeight(),"chat remains inside resized window immediately");SwingSmoke.snapshot(window,dir.resolve("chat-battle-small.png"));window.setSize(original);window.validate();
                 input(a).setText(String.join("",Collections.nCopies(520,"a")));check(input(a).getText().length()==500,"input enforces 500 character limit");input(a).setText("");
             });
-            // Load an older page without losing live messages or drafts.
             for(int i=0;i<23;i++)server.getStorage().saveChat(aid,bid,"Tin nhắn lịch sử "+i,"old-"+i);
             SwingSmoke.edt(a::logout);SwingSmoke.waitFor(()->server.getStorage().findByUsername("hai_dang").getStatus()==common.model.UserStatus.OFFLINE,"logout complete");SwingSmoke.login(a,server.getPort(),"hai_dang");
             SwingSmoke.edt(()->a.openChat(bid,"minh_anh"));SwingSmoke.waitFor(()->messageCount(a,bid)==20,"history loads after relogin");

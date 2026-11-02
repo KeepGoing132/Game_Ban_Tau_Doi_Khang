@@ -5,28 +5,15 @@ import java.awt.geom.*;
 import java.awt.image.BufferedImage;
 import java.util.prefs.Preferences;
 
-/**
- * The open sea, painted with Java2D primitives only: sky, swell, foam, god rays, gulls and the
- * "cast off" sequence that plays when a match screen appears. Every frame is a pure function of a
- * time value, so the scene can be sampled at any point without keeping per-particle state.
- *
- * <p>Large slow layers (sky, water body, vignette, foam crests) are cached as images or texture
- * sprites; a full frame costs a handful of blits plus a few dozen vector shapes, which keeps the
- * animated background affordable next to the 10x10 board repaint.</p>
- */
 public final class OceanScene {
     private OceanScene() { }
     private static final Preferences PREF = Preferences.userNodeForPackage(OceanScene.class);
     private static volatile boolean animated = PREF.getBoolean("ocean", true);
-    /** Seconds the "cast off" entrance effect runs for. */
     public static final double INTRO_SECONDS = 2.45;
     public static boolean isAnimated() { return animated; }
     public static void setAnimated(boolean value) { animated = value; PREF.putBoolean("ocean", value); }
-    /** Monotonic clock shared by every sea painter. */
     public static double time() { return System.nanoTime() / 1e9; }
 
-    // ---------------------------------------------------------------- math helpers
-    /** Deterministic pseudo random in [0,1): lets a frame be rebuilt from a single time value. */
     public static double noise(int seed) {
         int x = seed * 374761393 + 668265263; x = (x ^ (x >>> 13)) * 1274126177;
         return ((x ^ (x >>> 16)) & 0x7fffffff) / 2147483648.0;
@@ -40,17 +27,13 @@ public final class OceanScene {
         return new Color(color.getRed(), color.getGreen(), color.getBlue(), (int) Math.max(0, Math.min(255, amount)));
     }
 
-    // ---------------------------------------------------------------- cached layers
     private static int cachedWidth, cachedHeight;
     private static long cacheBuiltNanos;
-    /** Sky, water body and vignette are static: they are baked into one opaque layer. */
     private static BufferedImage backdrop;
     private static BufferedImage[][] crests;
     private static BufferedImage caustics, ray;
-    /** Crest sprites are used unscaled so Java2D can tile them with a plain blit. */
     private static final int[] CREST_WIDTH = {128, 160, 208, 264, 336};
     private static final int[] CREST_HEIGHT = {30, 38, 48, 60, 76};
-    /** A resize storm must not rebuild the baked layers on every intermediate size. */
     private static final long REBUILD_SETTLE_MS = 140;
 
     private static void ensureLayers(int width, int height) {
@@ -69,7 +52,6 @@ public final class OceanScene {
         s.setColor(alpha(Theme.SEA_HORIZON, 40)); s.fillRect(0, horizon + 1, width, 2);
         paintSun(s, width, height, horizon);
         paintIslands(s, width, horizon);
-        // water: turquoise shallows near the horizon, then blue, then the violet-tinted deep
         int shallowBand = horizon + Math.max(6, (height - horizon) / 9);
         s.setPaint(new GradientPaint(0, horizon, Theme.SEA_SHALLOW, 0, shallowBand, Theme.SEA_MID));
         s.fillRect(0, horizon, width, shallowBand - horizon);
@@ -110,7 +92,6 @@ public final class OceanScene {
             hill.curveTo(baseX + spread * 0.25, horizon - peak * 1.4, baseX + spread * 0.7, horizon - peak * 0.3, baseX + spread, horizon);
             hill.closePath(); g.fill(hill);
         }
-        // far-off sails on the horizon line
         g.setColor(new Color(196, 226, 236, 150));
         for (int i = 0; i < 3; i++) {
             double x = width * (0.30 + i * 0.07), size = 4 + i * 1.6;
@@ -118,7 +99,6 @@ public final class OceanScene {
                     new int[] {horizon - (int) size * 3, horizon - (int) size * 2, horizon - 1}, 3);
         }
     }
-    /** Foam crest sprites, far (bright, tight) to near (dark, stretched), in two looks each. */
     private static BufferedImage[][] crests() {
         if (crests != null) return crests;
         BufferedImage[][] sprites = new BufferedImage[CREST_WIDTH.length][2];
@@ -134,7 +114,6 @@ public final class OceanScene {
                     if (i == 0) crest.moveTo(x, y); else crest.lineTo(x, y);
                 }
                 Path2D body = (Path2D) crest.clone(); body.lineTo(width, height); body.lineTo(0, height); body.closePath();
-                // far crests are turquoise, near ones slide towards periwinkle blue
                 int red = (int) lerp(96, 168, calm), green = (int) lerp(240, 208, calm), blue = (int) lerp(232, 255, calm);
                 g.setPaint(new GradientPaint(0, 0, new Color(red, green, blue, (int) (88 - calm * 30)), 0, height, new Color(red, green, blue, 0)));
                 g.fill(body);
@@ -167,8 +146,6 @@ public final class OceanScene {
         g2.dispose();
     }
 
-    // ---------------------------------------------------------------- main painting
-    /** Sky, water body and living swell. Drawn behind the screen content. */
     public static void paintBackdrop(Graphics2D g, int width, int height, double t) {
         if (width < 8 || height < 8) return;
         ensureLayers(width, height);
@@ -176,18 +153,15 @@ public final class OceanScene {
         if (cachedWidth == width && cachedHeight == height) {
             g.drawImage(backdrop, 0, 0, null);
         } else {
-            // mid-resize: stretch the previous bake so the frame stays cheap
             g.drawImage(backdrop, 0, 0, width, height, null);
             horizon = horizon(cachedHeight);
         }
         paintClouds(g, width, horizon, t);
-        // swell: bands are spread over the whole water body so the motion reaches the near water
         double water = Math.max(1, height - horizon);
         double[] position = {.02, .15, .31, .50, .72};
         double[] scroll = {30, 22, 16, 11, 7};
         double[] amp = {1.4, 2.2, 3, 4, 5};
         double[] surface = {1.0, .95, .88, .80, .70};
-        // smaller windows get the smaller crest sprites, so waves stay proportionate
         double reach = Math.min(1, water / 600.0);
         for (int i = 0; i < position.length; i++) {
             double bob = Math.sin(t * (0.42 - i * 0.04) + i * 1.7) * amp[i];
@@ -202,7 +176,6 @@ public final class OceanScene {
         paintDistantShips(g, width, horizon, t);
         paintGulls(g, width, horizon, t, 0.55, 3);
     }
-    /** Light haze drawn above the content so the UI feels submerged in the same water. */
     public static void paintDrift(Graphics2D g, int width, int height, double t) {
         if (width < 8 || height < 8) return;
         paintRays(g, width, height, 0, t, 0.05, 2);
@@ -242,7 +215,6 @@ public final class OceanScene {
             g.fill(new Rectangle2D.Double(x, y, spread * (0.5 + Math.abs(Math.sin(t * 0.9 + i * 0.7)) * 0.5), 2 + p * 2));
         }
     }
-    /** God rays are a cached sprite, so three of them cost a few blits instead of three big fills. */
     private static void paintRays(Graphics2D g, int width, int height, int horizon, double t, double alpha, int count) {
         BufferedImage sprite = raySprite();
         for (int i = 0; i < count; i++) {
@@ -254,7 +226,6 @@ public final class OceanScene {
             g2.dispose();
         }
     }
-    /** A leaf-shaped shaft of light: it tapers to nothing at both ends, so no hard edges show. */
     private static BufferedImage raySprite() {
         if (ray != null) return ray;
         int width = 210, height = 520, mid = width / 2;
@@ -274,7 +245,6 @@ public final class OceanScene {
         g.dispose();
         return ray = image;
     }
-    /** Shifting light net, as seen through clear water: one seamless tile, scrolled as a blit. */
     public static void paintCaustics(Graphics2D g, int x, int y, int width, int height, double t, double alpha) {
         if (width <= 0 || height <= 0) return;
         BufferedImage sprite = causticSprite();
@@ -362,7 +332,6 @@ public final class OceanScene {
             g.draw(new QuadCurve2D.Double(x, y, x + size * 0.6, y - flap, x + size * 2, y + flap * 0.4));
         }
     }
-    /** Foam crawling along the bottom edge, so the sea laps at the base of the screen. */
     private static void paintBottomLap(Graphics2D g, int width, int height, double t, double alpha) {
         int base = height - 10;
         Path2D lap = new Path2D.Double();
@@ -382,7 +351,6 @@ public final class OceanScene {
             g.fill(new Ellipse2D.Double(x, y, size, size * 0.8));
         }
     }
-    /** A tiny seascape strip: used as decoration inside narrow headers. */
     public static void paintMiniSeascape(Graphics2D g, int width, int height, double t) {
         if (width < 4 || height < 4) return;
         int horizon = Math.max(2, (int) (height * 0.52));
@@ -406,7 +374,6 @@ public final class OceanScene {
         paintShipSilhouette(g, width * 0.3, horizon + height * 0.16, Math.max(0.25, height / 90.0), new Color(7, 30, 48, 220), new Color(190, 226, 240, 150));
     }
 
-    // ---------------------------------------------------------------- decorations
     public static void paintShipSilhouette(Graphics2D g, double x, double y, double scale, Color body, Color accent) {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.translate(x, y); g2.scale(scale, scale);
@@ -422,7 +389,6 @@ public final class OceanScene {
         g2.setColor(accent); g2.draw(new Line2D.Double(-24, -3, 24, -3));
         g2.dispose();
     }
-    /** Expanding sonar rings, as seen on a surface-search console. */
     public static void paintSonar(Graphics2D g, double cx, double cy, double maxRadius, double elapsed, double period,
                                   Color color, int rings, double alpha) {
         if (elapsed <= 0) return;
@@ -442,7 +408,6 @@ public final class OceanScene {
             g.draw(new Ellipse2D.Double(cx - step, cy - step, step * 2, step * 2));
         }
     }
-    /** Splash rings left on the water by a shot. */
     public static void paintRipple(Graphics2D g, double cx, double cy, double elapsed, double maxRadius) {
         if (elapsed < 0 || elapsed > 2.6) return;
         double p = clamp01(elapsed / 2.6);
@@ -498,7 +463,6 @@ public final class OceanScene {
             g.drawString(marks[i], (float) x - metrics.stringWidth(marks[i]) / 2f, (float) y + metrics.getAscent() / 3f);
         }
     }
-    /** Animated water line used as a section rule. */
     public static void paintWaveRule(Graphics2D g, int x, int y, int width, double t, Color color, double alpha) {
         Path2D line = new Path2D.Double();
         for (int i = 0; i <= 40; i++) {
@@ -509,11 +473,6 @@ public final class OceanScene {
         g.setStroke(new BasicStroke(1.3f)); g.draw(line);
     }
 
-    // ---------------------------------------------------------------- entrance effect
-    /**
-     * "Cast off": a breaking wave crosses the screen while a sonar ping and the mission plate
-     * announce the new phase. Painted over the content, never opaque enough to hide it.
-     */
     public static void paintIntro(Graphics2D g, int width, int height, double elapsed, String title, String subtitle) {
         if (elapsed < 0 || elapsed >= INTRO_SECONDS) return;
         double fill = clamp01(elapsed / 0.50);
