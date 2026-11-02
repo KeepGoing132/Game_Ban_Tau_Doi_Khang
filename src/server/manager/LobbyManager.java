@@ -200,8 +200,10 @@ public class LobbyManager {
             Invitation i=invitations.get(id);
             if(i==null || i.receiver!=receiver || System.currentTimeMillis()>=i.expires)throw new DomainException("INVITE_EXPIRED","Lời mời không tồn tại hoặc đã hết hạn");
             Object accept=request.getData().get("accept");
-            if(!(accept instanceof Boolean))throw new IllegalArgumentException();
-            if((Boolean)accept) {
+            if(!(accept instanceof Boolean))
+                throw new IllegalArgumentException();
+            if((Boolean)accept) 
+            {
                 requireFree(receiver);
                 requireFree(i.sender);
             }
