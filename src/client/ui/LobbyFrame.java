@@ -137,7 +137,6 @@ public class LobbyFrame extends JFrame {
         JPanel top = Theme.stack();
         Theme.addStack(top, lblUserInfo, 5);
         top.add(Box.createVerticalStrut(12));
-        rankCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 92));
         Theme.addStack(top, rankCard, 14);
         JPanel stats = Theme.transparent(new GridLayout(1, 3, 14, 0));
         stats.add(stat("TỔNG ĐIỂM", lblPoints, "+3 điểm cho mỗi chiến thắng", Theme.AMBER));
@@ -164,6 +163,10 @@ public class LobbyFrame extends JFrame {
             repaint();
         }
 
+        @Override public Dimension getPreferredSize() { return new Dimension(240, 104); }
+        @Override public Dimension getMinimumSize() { return new Dimension(120, 104); }
+        @Override public Dimension getMaximumSize() { return new Dimension(Integer.MAX_VALUE, 104); }
+
         @Override protected void paintComponent(Graphics graphics) {
             if (points < 0) {
                 return;
@@ -182,11 +185,11 @@ public class LobbyFrame extends JFrame {
             int textX = 12 + insignia + 16;
             g.setFont(Theme.FONT_SMALL.deriveFont(Font.BOLD));
             g.setColor(Theme.TEXT_MUTED);
-            g.drawString("CẤP BẬC HIỆN TẠI", textX, 30);
+            g.drawString("CẤP BẬC HIỆN TẠI", textX, 32);
             g.setFont(Theme.FONT_HEADER);
             g.setColor(tier.color());
-            g.drawString(tier.name().toUpperCase(Locale.ROOT), textX, 54);
-            int barX = textX, barW = Math.max(60, w - barX - 22), barY = h - 26;
+            g.drawString(tier.name().toUpperCase(Locale.ROOT), textX, 58);
+            int barX = textX, barW = Math.max(60, w - barX - 22), barY = h - 24;
             g.setColor(new Color(255, 255, 255, 22));
             g.fillRoundRect(barX, barY, barW, 8, 8, 8);
             g.setColor(tier.color());
