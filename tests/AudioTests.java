@@ -26,8 +26,7 @@ public final class AudioTests {
             check(rms > FULL_SCALE * 0.01, sound + " is audible");
             if (isTonal(sound)) check(maxStep < FULL_SCALE * 0.12, sound + " has no step between neighbouring samples");
         }
-        byte[] surf = GameAudio.surfLoop(.6);
-        int surfMaxStep = 0, surfPeak = 0, previous = 0;
+        byte[] surf = GameAudio.surfLoop(.6);        int surfMaxStep = 0, surfPeak = 0, previous = 0;
         for (int i = 0; i < surf.length / 2; i++) {
             int sample = sample(surf, i);
             surfPeak = Math.max(surfPeak, Math.abs(sample));
@@ -37,13 +36,21 @@ public final class AudioTests {
         int seamStep = Math.abs(sample(surf, 0) - sample(surf, surf.length / 2 - 1));
         check(seamStep <= Math.max(900, surfMaxStep), "ambience loop crosses its seam without a jump, step " + seamStep);
         check(surfPeak < FULL_SCALE * 0.4, "ambience keeps headroom instead of clipping");
+        check(!sameTake(GameAudio.Sound.SUNK, 1, 11, 1, 12), "a sinking ship never replays the same take twice");
+        check(!sameTake(GameAudio.Sound.LAUNCH, 1, 11, 1.05, 11), "consecutive guns differ in pitch");
+        check(!sameTake(GameAudio.Sound.HIT, 1, 11, 1, 12), "consecutive hits differ in their debris");
+        check(sameTake(GameAudio.Sound.LAUNCH, 1, 11, 1, 11), "one take stays reproducible for the tests");
         float master = GameAudio.getMasterVolume();
         GameAudio.setMasterVolume(2f); check(GameAudio.getMasterVolume() == 1f, "master level is clamped to 1");
         GameAudio.setMasterVolume(-1f); check(GameAudio.getMasterVolume() == 0f, "master level is clamped to 0");
         GameAudio.setMasterVolume(master);
         check(GameAudio.getSfxVolume() >= 0 && GameAudio.getSfxVolume() <= 1, "effects level stays in range");
         check(GameAudio.getAmbienceVolume() >= 0 && GameAudio.getAmbienceVolume() <= 1, "sea level stays in range");
-        System.out.println("PASS audio: click-free envelopes, headroom without clipping, smooth tonal cues, seamless sea loop, clamped levels");
+        System.out.println("PASS audio: click-free envelopes, headroom without clipping, smooth tonal cues, seamless sea loop, a fresh take per shot, clamped levels");
+    }
+
+    private static boolean sameTake(GameAudio.Sound sound, double pitchA, long seedA, double pitchB, long seedB) {
+        return java.util.Arrays.equals(GameAudio.synthesize(sound, pitchA, seedA), GameAudio.synthesize(sound, pitchB, seedB));
     }
 
     private static int sample(byte[] pcm, int index) {

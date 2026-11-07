@@ -356,9 +356,9 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         g.setColor(new Color(Theme.SEA_HORIZON.getRed(), Theme.SEA_HORIZON.getGreen(), Theme.SEA_HORIZON.getBlue(), 78));
         g.drawRoundRect(0, 0, w - 1, h - 1, 20, 20);
         g.clip(new RoundRectangle2D.Double(1, 1, w - 2, h - 2, 19, 19));
-        g.setPaint(new GradientPaint(0, 0, new Color(36, 172, 188, 204), 0, h * 0.55f, new Color(22, 104, 168, 214)));
+        g.setPaint(new GradientPaint(0, 0, new Color(26, 88, 106, 206), 0, h * 0.55f, new Color(14, 58, 74, 216)));
         g.fillRect(1, 1, w - 2, h - 2);
-        g.setPaint(new GradientPaint(0, h * 0.55f, new Color(22, 104, 168, 214), 0, h, new Color(24, 34, 96, 226)));
+        g.setPaint(new GradientPaint(0, h * 0.55f, new Color(14, 58, 74, 216), 0, h, new Color(5, 26, 38, 228)));
         g.fillRect(1, (int) (h * 0.55), w - 2, h - (int) (h * 0.55));
         paintDepthContours(g, w, h, 0);
         if (!compact) {
@@ -436,7 +436,7 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             setFocusPainted(false);
             setRolloverEnabled(true);
             setMargin(new Insets(0, 0, 0, 0));
-            setPreferredSize(new Dimension(34, 34));
+            setPreferredSize(new Dimension(40, 40));
             setBorder(null);
         }
 
@@ -464,22 +464,22 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             Color fill = null;
             switch (state) {
                 case SHIP:
-                    fill = new Color(120, 112, 214, 216);
+                    fill = new Color(122, 156, 180, 224);
                     break;
                 case HIT:
-                    fill = new Color(178, 72, 82, 232);
+                    fill = new Color(255, 90, 60, 238);
                     break;
                 case SUNK:
-                    fill = new Color(88, 48, 92, 236);
+                    fill = new Color(51, 71, 90, 242);
                     break;
                 case MISS:
-                    fill = new Color(30, 58, 94, 206);
+                    fill = new Color(23, 57, 74, 214);
                     break;
                 case PREVIEW_VALID:
-                    fill = new Color(40, 132, 116, 224);
+                    fill = new Color(22, 199, 192, 228);
                     break;
                 case PREVIEW_INVALID:
-                    fill = new Color(126, 58, 68, 224);
+                    fill = new Color(158, 58, 62, 228);
                     break;
                 default:
                     break;
@@ -508,10 +508,10 @@ public class BoardGridPanel extends Theme.RoundedPanel {
 
         private void paintShip(Graphics2D g, int w, int h, int cx, int cy) {
             Ship ship = fleetCells[x][y];
-            g.setColor(new Color(216, 226, 255, 235));
+            g.setColor(new Color(214, 232, 240, 235));
             if (ship == null) {
                 g.fillRoundRect(w / 3, h / 6, w / 3, h * 2 / 3, 4, 4);
-                g.setColor(new Color(238, 242, 255));
+                g.setColor(new Color(248, 252, 255));
                 g.drawLine(cx, h / 3, cx, h * 2 / 3);
                 return;
             }
@@ -538,14 +538,14 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             int left = position == min ? w / 7 : 0;
             int right = position == max ? w * 6 / 7 : w;
             int bowX = position == min ? left + w / 4 : left;
-            g.setColor(new Color(196, 182, 255));
+            g.setColor(new Color(226, 240, 248));
             g.fillPolygon(new int[]{left, bowX, right, right, bowX}, new int[]{cy, top, top, bottom, bottom}, 5);
-            g.setColor(new Color(122, 106, 196));
+            g.setColor(new Color(126, 158, 180));
             int deckX = position == min ? w / 3 : 0;
             int deckWidth = position == max ? w * 2 / 3 : w;
             g.fillRect(deckX, h / 3, deckWidth, h / 3);
             if (position == min + (max - min) / 2) {
-                g.setColor(new Color(240, 238, 255));
+                g.setColor(new Color(255, 255, 255));
                 g.fillRoundRect(w / 3, h / 3, w / 3, h / 3, 3, 3);
                 g.setStroke(new BasicStroke(2));
                 g.drawLine(w / 2, h / 2, w * 4 / 5, h / 2);

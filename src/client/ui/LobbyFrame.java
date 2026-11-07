@@ -146,8 +146,8 @@ public class LobbyFrame extends JFrame {
     }
 
     private JPanel stat(String title, JLabel value, String detail, Color accent) {
-        JPanel card = Theme.vividCard(Theme.blend(new Color(22, 26, 64), accent, .26f),
-                Theme.blend(new Color(30, 44, 84), accent, .16f), 15);
+        JPanel card = Theme.vividCard(Theme.blend(new Color(8, 40, 54), accent, .26f),
+                Theme.blend(new Color(14, 62, 78), accent, .16f), 15);
         card.setLayout(new BorderLayout(0, 4));
         card.add(Theme.label(title, Theme.FONT_SMALL.deriveFont(Font.BOLD), accent), BorderLayout.NORTH);
         value.setForeground(accent);
@@ -157,7 +157,7 @@ public class LobbyFrame extends JFrame {
     }
 
     private JPanel matchmakingCard() {
-        JPanel queue = Theme.vividCard(new Color(21, 84, 116), new Color(74, 58, 140), 22);
+        JPanel queue = Theme.vividCard(new Color(10, 62, 74), new Color(14, 104, 112), 22);
         queue.setLayout(new BorderLayout(12, 12));
         JPanel text = Theme.stack();
         Theme.addStack(text, Theme.badge("CHỌN ĐỐI THỦ", Theme.MINT), 12);

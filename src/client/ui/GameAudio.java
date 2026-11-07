@@ -29,6 +29,7 @@ public final class GameAudio {
     private static volatile float seaVolume = PREF.getFloat("ambience_volume", .60f);
 
     private static final Set<Clip> playing = Collections.newSetFromMap(new ConcurrentHashMap<Clip, Boolean>());
+    private static final Random VARIATION = new Random();
     private static final ExecutorService WORK = new ThreadPoolExecutor(1, 2, 20, TimeUnit.SECONDS,
             new ArrayBlockingQueue<Runnable>(16), GameAudio::audioThread, new ThreadPoolExecutor.DiscardPolicy());
 
@@ -125,7 +126,9 @@ public final class GameAudio {
             return;
         }
         try {
-            byte[] data = synthesize(sound, gain);
+            double pitch = 1 + (VARIATION.nextDouble() * 2 - 1) * .055;
+            double varied = gain * (.94 + VARIATION.nextDouble() * .12);
+            byte[] data = synthesize(sound, varied, pitch, VARIATION.nextLong());
             Clip clip = AudioSystem.getClip();
             clip.open(format(), data, 0, data.length);
             playing.add(clip);
@@ -157,136 +160,292 @@ public final class GameAudio {
     }
 
     public static byte[] synthesize(Sound sound) {
-        return synthesize(sound, .9);
+        return synthesize(sound, .9, 1, 73 + sound.ordinal());
+    }
+
+    public static byte[] synthesize(Sound sound, double pitch, long seed) {
+        return synthesize(sound, .9, pitch, seed);
     }
 
     static byte[] synthesize(Sound sound, double gain) {
+        return synthesize(sound, gain, 1, 73 + sound.ordinal());
+    }
+
+    private static byte[] synthesize(Sound sound, double gain, double pitch, long seed) {
         double duration = duration(sound);
-        int samples = (int) (RATE * duration);
-        byte[] bytes = new byte[samples * 2];
-        Random noise = new Random(73 + sound.ordinal());
-        double phase = 0, phase2 = 0;
-        double hiss = 0, rumble = 0, swell = 0;
+        int samples = Math.max(1, (int) (RATE * duration));
+        double[] dry = new double[samples];
+        Random noise = new Random(seed);
+        double[] dropStart = new double[3], dropFreq = new double[3];
+        for (int k = 0; k < 3; k++) {
+            dropStart[k] = .06 + noise.nextDouble() * (duration * .55);
+            dropFreq[k] = 720 + noise.nextDouble() * 980;
+        }
+        double phase = 0, phase2 = 0, phase3 = 0;
+        double hiss = 0, rumble = 0, swell = 0, foam = 0;
         for (int i = 0; i < samples; i++) {
             double t = i / (double) RATE;
             double p = t / duration;
             double grain = noise.nextDouble() * 2 - 1;
             hiss += .35 * (grain - hiss);
             rumble += .05 * (grain - rumble);
+            swell += .08 * (grain - swell);
+            foam += .08 * (grain - foam);
             double value;
             switch (sound) {
                 case CLICK:
-                    phase += 2 * Math.PI * (860 - 240 * p) / RATE;
-                    value = Math.sin(phase) * Math.exp(-18 * t) + .18 * hiss * Math.exp(-40 * t);
+                    phase += 2 * Math.PI * pitch * (1720 - 520 * p) / RATE;
+                    phase2 += 2 * Math.PI * pitch * 640 / RATE;
+                    value = .62 * Math.sin(phase) * Math.exp(-42 * t)
+                            + .30 * Math.sin(phase2) * Math.exp(-26 * t)
+                            + .18 * hiss * Math.exp(-55 * t);
                     break;
                 case SELECT:
-                    phase += 2 * Math.PI * (940 + 320 * smooth(p * 1.6)) / RATE;
-                    value = .8 * Math.sin(phase) * Math.exp(-7 * t) + .2 * Math.sin(2 * phase) * Math.exp(-11 * t);
+                    phase += 2 * Math.PI * pitch * (1180 + 260 * smooth(p * 1.6)) / RATE;
+                    value = .72 * Math.sin(phase) * Math.exp(-8 * t)
+                            + .24 * Math.sin(2 * phase) * Math.exp(-13 * t)
+                            + .12 * Math.sin(3 * phase) * Math.exp(-18 * t);
                     break;
-                case TURN:
-                    double firstChime = Math.exp(-6 * t) * Math.sin(2 * Math.PI * 660 * t);
-                    double secondChime = t < .18 ? 0 : Math.exp(-5.4 * (t - .18)) * Math.sin(2 * Math.PI * 990 * (t - .18)) * smooth((t - .18) / .10);
-                    value = .72 * (firstChime + .85 * secondChime);
+                case TURN: {
+                    double firstChime = Math.exp(-5.6 * t) * (Math.sin(2 * Math.PI * pitch * 660 * t)
+                            + .42 * Math.sin(2 * Math.PI * pitch * 990 * t)
+                            + .22 * Math.sin(2 * Math.PI * pitch * 1320 * t));
+                    double secondChime = t < .17 ? 0 : Math.exp(-5 * (t - .17)) * (Math.sin(2 * Math.PI * pitch * 990 * (t - .17))
+                            + .36 * Math.sin(2 * Math.PI * pitch * 1485 * (t - .17))) * smooth((t - .17) / .1);
+                    double gong = .30 * Math.sin(2 * Math.PI * pitch * 165 * t) * Math.exp(-2.6 * t);
+                    value = .58 * (firstChime + .9 * secondChime) + gong;
                     break;
-                case LAUNCH:
-                    phase += 2 * Math.PI * (170 + 1150 * smooth(p)) / RATE;
-                    swell += .12 * (grain - swell);
-                    value = .55 * Math.sin(phase) * (1 - p) + .55 * swell * 2.4 * Math.sin(Math.PI * Math.min(1, p * 1.15));
+                }
+                case LAUNCH: {
+                    phase += 2 * Math.PI * pitch * (150 - 112 * smooth(p * 1.3)) / RATE;
+                    phase2 += 2 * Math.PI * pitch * (1500 + 420 * Math.sin(2 * Math.PI * 6.5 * t)) / RATE;
+                    double crack = .78 * (grain - hiss) * Math.exp(-46 * t);
+                    double boom = .92 * Math.sin(phase) * Math.exp(-4.6 * t);
+                    double body = rumble * 3.4 * Math.exp(-3.2 * t);
+                    double whistle = .30 * Math.sin(phase2) * smooth((t - .055) / .09)
+                            * (1 - smooth((t - duration * .62) / (duration * .38))) * Math.exp(-.8 * t);
+                    value = crack + boom + body + whistle;
                     break;
-                case MISS:
-                    phase += 2 * Math.PI * (430 - 190 * smooth(p)) / RATE;
-                    swell += .18 * (grain - swell);
-                    value = .62 * Math.sin(phase) * Math.exp(-3.4 * t) + .42 * (grain - swell) * Math.exp(-2.6 * t) * (p < .3 ? 1 : .45);
+                }
+                case MISS: {
+                    phase += 2 * Math.PI * pitch * (520 - 260 * smooth(p)) / RATE;
+                    double plume = Math.pow(smooth(t / .06), .7) * Math.exp(-3 * t);
+                    value = .58 * (grain - foam) * .9 * plume
+                            + .46 * Math.sin(phase) * Math.exp(-4.2 * t) * plume
+                            + droplets(t, dropStart, dropFreq, pitch);
                     break;
-                case HIT:
-                    phase += 2 * Math.PI * (128 - 58 * smooth(p * 1.4)) / RATE;
-                    phase2 += 2 * Math.PI * 246 / RATE;
-                    value = .78 * Math.sin(phase) * Math.exp(-6.2 * t)
-                            + .30 * Math.sin(phase2) * Math.exp(-16 * t)
-                            + .34 * hiss * Math.exp(-9 * t);
+                }
+                case HIT: {
+                    phase += 2 * Math.PI * pitch * (170 - 120 * smooth(p * 1.35)) / RATE;
+                    phase2 += 2 * Math.PI * pitch * 620 / RATE;
+                    phase3 += 2 * Math.PI * pitch * 1310 / RATE;
+                    double kick = .45 * hiss * Math.exp(-34 * t);
+                    double blast = .86 * Math.sin(phase) * Math.exp(-5.4 * t);
+                    double steel = (.24 * Math.sin(phase2) + .16 * Math.sin(phase3) + .10 * Math.sin(1.5 * phase2)) * Math.exp(-7.5 * t);
+                    value = kick + blast + steel + .30 * rumble * 3 * Math.exp(-3 * t);
                     break;
-                case SUNK:
-                    phase += 2 * Math.PI * (96 - 50 * smooth(p * 1.2)) / RATE;
-                    phase2 += 2 * Math.PI * (176 + 12 * Math.sin(2 * Math.PI * 3.1 * t)) / RATE;
-                    swell += .05 * (grain - swell);
-                    double bubbles = t < .55 ? 0 : Math.max(0, .30 * Math.sin(2 * Math.PI * (4 + 9 * p) * t) * Math.sin(Math.PI * Math.min(1, (p - .55) / .45)));
-                    value = .85 * Math.sin(phase) * Math.exp(-2.1 * t)
-                            + .30 * Math.sin(phase2) * Math.exp(-3.2 * t) * .6
-                            + .70 * rumble * 3.2 * Math.exp(-1.7 * t)
-                            + bubbles
-                            + .22 * hiss * Math.exp(-5 * t);
+                }
+                case SUNK: {
+                    phase += 2 * Math.PI * pitch * (120 - 74 * smooth(p * 1.1)) / RATE;
+                    phase2 += 2 * Math.PI * pitch * (176 + 14 * Math.sin(2 * Math.PI * 3.1 * t)) / RATE;
+                    phase3 += 2 * Math.PI * pitch * (58 + 5 * Math.sin(2 * Math.PI * .7 * t)) / RATE;
+                    double blast = .88 * Math.sin(phase) * Math.exp(-2.4 * t) + .40 * hiss * Math.exp(-14 * t);
+                    double groan = (.36 * Math.sin(phase3) + .22 * Math.sin(1.5 * phase3) + .12 * Math.sin(phase2))
+                            * smooth((t - .18) / .5) * Math.exp(-1.1 * t);
+                    double rush = swell * 2.2 * smooth((t - .1) / .35) * Math.exp(-1.6 * t) * .55;
+                    double bubbles = t < .5 ? 0 : Math.max(0, .34 * Math.sin(2 * Math.PI * (4 + 9 * p) * t) * Math.sin(Math.PI * Math.min(1, (p - .5) / .5)));
+                    value = blast + groan + rush + bubbles + .26 * rumble * 3.4 * Math.exp(-1.5 * t);
                     break;
-                case SPLASH:
-                    swell += .16 * (grain - swell);
-                    value = .40 * Math.sin(2 * Math.PI * (760 + 900 * smooth(p)) * t) * Math.exp(-3.6 * t)
-                            + .85 * (grain - swell) * Math.sin(Math.PI * Math.min(1, p * 1.25)) * .9;
+                }
+                case SPLASH: {
+                    phase += 2 * Math.PI * pitch * (860 + 700 * smooth(p)) / RATE;
+                    double bloom = Math.pow(smooth(t / .05), .6) * Math.exp(-3.2 * t);
+                    value = .55 * (grain - foam) * .9 * bloom
+                            + .38 * Math.sin(phase) * Math.exp(-3.6 * t) * bloom
+                            + .30 * swell * 2 * bloom
+                            + droplets(t, dropStart, dropFreq, pitch);
                     break;
-                case WAVE:
-                    swell += .035 * (grain - swell);
+                }
+                case WAVE: {
                     double surge = Math.pow(Math.sin(Math.PI * Math.min(1, p * 1.05)), .8);
-                    value = (swell * 2.6 + .18 * Math.sin(2 * Math.PI * (74 - 24 * p) * t)) * surge;
+                    value = (swell * 2.2 + .22 * Math.sin(2 * Math.PI * pitch * (74 - 24 * p) * t)
+                            + .12 * Math.sin(2 * Math.PI * pitch * (150 + 60 * p) * t)) * surge;
                     break;
-                case PING:
-                    phase += 2 * Math.PI * (1320 - 330 * smooth(p * 1.1)) / RATE;
-                    double echo = t < .42 ? 0 : .34 * Math.sin(2 * Math.PI * 1180 * (t - .42)) * Math.exp(-4.6 * (t - .42));
-                    value = .74 * Math.sin(phase) * Math.exp(-2.7 * t) + echo + .14 * Math.sin(2.3 * phase) * Math.exp(-4 * t);
+                }
+                case PING: {
+                    phase += 2 * Math.PI * pitch * (1420 - 380 * smooth(p * 1.1)) / RATE;
+                    double ping = .70 * Math.sin(phase) * Math.exp(-3.1 * t) + .14 * Math.sin(2.3 * phase) * Math.exp(-4.5 * t);
+                    double echoes = 0;
+                    double[] echoAt = {.42, .84, 1.26};
+                    for (int k = 0; k < echoAt.length; k++) {
+                        double age = t - echoAt[k];
+                        if (age > 0) {
+                            echoes += (.34 / (k + 1.6)) * Math.sin(2 * Math.PI * pitch * (1180 - k * 90) * age) * Math.exp(-4.4 * age);
+                        }
+                    }
+                    value = ping + echoes + .10 * hiss * Math.exp(-6 * t);
                     break;
+                }
                 case WIN: {
-                    double[] notes = {523.25, 659.25, 783.99, 1046.5};
+                    double[] notes = {523.25, 659.25, 783.99, 1046.5, 1318.5};
                     double arpeggio = 0;
                     for (int note = 0; note < notes.length; note++) {
-                        double start = note * .19;
+                        double start = note * .17;
                         double age = t - start;
                         if (age < 0) {
                             continue;
                         }
-                        double bell = Math.sin(2 * Math.PI * notes[note] * age) + .35 * Math.sin(4 * Math.PI * notes[note] * age);
-                        arpeggio += bell * Math.exp(-2.5 * age) * (1 - .18 * note);
+                        double bell = Math.sin(2 * Math.PI * pitch * notes[note] * age)
+                                + .34 * Math.sin(4 * Math.PI * pitch * notes[note] * age)
+                                + .16 * Math.sin(6 * Math.PI * pitch * notes[note] * age);
+                        arpeggio += bell * Math.exp(-2.3 * age) * (1 - .12 * note);
                     }
-                    double pad = (.30 * Math.sin(2 * Math.PI * 261.6 * t)
-                            + .26 * Math.sin(2 * Math.PI * 329.6 * t)
-                            + .22 * Math.sin(2 * Math.PI * 392 * t)) * smooth(t / .5) * (1 - p * .55);
-                    double shimmer = .10 * Math.sin(2 * Math.PI * 2093 * t)
-                            * (0.6 + 0.4 * Math.sin(2 * Math.PI * 5.5 * t)) * smooth((t - .35) / .6) * (1 - p);
-                    value = .42 * arpeggio + pad + shimmer + .10 * swell * 2.2 * smooth((t - .1) / .7) * (1 - p);
+                    double horn = (.30 * Math.sin(2 * Math.PI * pitch * 261.6 * t)
+                            + .26 * Math.sin(2 * Math.PI * pitch * 329.6 * t)
+                            + .22 * Math.sin(2 * Math.PI * pitch * 392 * t)
+                            + .14 * Math.sin(2 * Math.PI * pitch * 523.25 * t)) * smooth(t / .45) * (1 - p * .5);
+                    double timpani = .34 * Math.sin(2 * Math.PI * pitch * 98 * t) * Math.exp(-3.4 * t)
+                            + (t < .62 ? 0 : .30 * Math.sin(2 * Math.PI * pitch * 98 * (t - .62)) * Math.exp(-3.4 * (t - .62)));
+                    double shimmer = .12 * hiss * (.6 + .4 * Math.sin(2 * Math.PI * 5.5 * t)) * smooth((t - .3) / .5) * (1 - p);
+                    value = .40 * arpeggio + horn + timpani + shimmer;
                     break;
                 }
                 case LOSE: {
-                    phase += 2 * Math.PI * (392 - 96 * smooth(p)) / RATE;
-                    phase2 += 2 * Math.PI * (311.1 - 70 * smooth(p)) / RATE;
-                    double pad = (.26 * Math.sin(2 * Math.PI * 98 * t) + .20 * Math.sin(2 * Math.PI * 130.8 * t))
-                            * smooth(t / .7) * (1 - p * .5);
-                    value = .40 * Math.sin(phase) * (1 - p * .35)
-                            + .34 * Math.sin(phase2) * (1 - p * .4)
+                    phase += 2 * Math.PI * pitch * (392 - 96 * smooth(p)) / RATE;
+                    phase2 += 2 * Math.PI * pitch * (311.1 - 70 * smooth(p)) / RATE;
+                    double pad = (.26 * Math.sin(2 * Math.PI * pitch * 98 * t)
+                            + .20 * Math.sin(2 * Math.PI * pitch * 130.8 * t)
+                            + .12 * Math.sin(2 * Math.PI * pitch * 155.6 * t)) * smooth(t / .6) * (1 - p * .45);
+                    double foghorn = (.22 * Math.sin(2 * Math.PI * pitch * 110 * t)
+                            + .16 * Math.sin(2 * Math.PI * pitch * 145.8 * t)) * smooth((t - .35) / .8) * (1 - p * .3);
+                    value = .40 * Math.sin(phase) * (1 - p * .3)
+                            + .34 * Math.sin(phase2) * (1 - p * .35)
                             + pad
-                            + .34 * rumble * 2.6 * smooth((t - .2) / .8) * (1 - p);
+                            + foghorn
+                            + .30 * rumble * 2.6 * smooth((t - .2) / .8) * (1 - p);
                     break;
                 }
                 default:
                     value = 0;
             }
-            value = softLimit(value);
-            short sample = (short) (Math.max(-1, Math.min(1, value * window(t, duration) * gain)) * 9200);
+            dry[i] = softLimit(value) * window(t, duration) * gain;
+        }
+        double[] wet = room(dry, tail(sound), damping(sound));
+        double mix = room(sound);
+        byte[] bytes = new byte[wet.length * 2];
+        for (int i = 0; i < wet.length; i++) {
+            double release = smooth((wet.length - i) / (RATE * .075));
+            double value = softLimit((i < dry.length ? dry[i] : 0) + mix * wet[i]) * release;
+            short sample = (short) (Math.max(-1, Math.min(1, value)) * 9200);
             bytes[i * 2] = (byte) sample;
             bytes[i * 2 + 1] = (byte) (sample >> 8);
         }
         return bytes;
     }
 
+    private static double droplets(double t, double[] start, double[] freq, double pitch) {
+        double sum = 0;
+        for (int k = 0; k < start.length; k++) {
+            double age = t - start[k];
+            if (age > 0 && age < .16) {
+                sum += .16 * Math.sin(2 * Math.PI * pitch * freq[k] * age) * Math.exp(-32 * age) * Math.sin(Math.PI * age / .16);
+            }
+        }
+        return sum;
+    }
+
+    private static double[] room(double[] dry, double tailSeconds, double damping) {
+        int tail = Math.max(1, (int) (RATE * tailSeconds));
+        double[] wet = new double[dry.length + tail];
+        int[] delays = {(int) (RATE * .0297), (int) (RATE * .0371), (int) (RATE * .0411), (int) (RATE * .0437)};
+        double[] feedback = {.805, .795, .784, .773};
+        for (int comb = 0; comb < delays.length; comb++) {
+            int delay = Math.max(1, delays[comb]);
+            double[] line = new double[delay];
+            double damped = 0;
+            int at = 0;
+            for (int i = 0; i < wet.length; i++) {
+                double delayed = line[at];
+                damped += damping * (delayed - damped);
+                line[at] = (i < dry.length ? dry[i] * .25 : 0) + damped * feedback[comb];
+                at = at + 1 == delay ? 0 : at + 1;
+                wet[i] += delayed * .25;
+            }
+        }
+        int[] spreads = {(int) (RATE * .0051), (int) (RATE * .0017)};
+        for (int stage = 0; stage < spreads.length; stage++) {
+            int delay = Math.max(1, spreads[stage]);
+            double[] line = new double[delay];
+            double scale = .5;
+            int at = 0;
+            for (int i = 0; i < wet.length; i++) {
+                double input = wet[i];
+                double delayed = line[at];
+                double output = delayed - scale * input;
+                line[at] = input + scale * output;
+                at = at + 1 == delay ? 0 : at + 1;
+                wet[i] = output;
+            }
+        }
+        return wet;
+    }
+
+    private static double tail(Sound sound) {
+        switch (sound) {
+            case CLICK: return .07;
+            case SELECT: return .10;
+            case TURN: return .45;
+            case LAUNCH: return .70;
+            case MISS: return .30;
+            case HIT: return .55;
+            case SUNK: return 1.20;
+            case SPLASH: return .45;
+            case WAVE: return .50;
+            case PING: return 1;
+            case WIN: return .95;
+            default: return 1.10;
+        }
+    }
+
+    private static double damping(Sound sound) {
+        switch (sound) {
+            case CLICK: case SELECT: return .55;
+            case LOSE: return .22;
+            case SUNK: return .26;
+            case WAVE: return .30;
+            case PING: return .32;
+            case WIN: return .34;
+            case TURN: case HIT: return .35;
+            default: return .40;
+        }
+    }
+
+    private static double room(Sound sound) {
+        switch (sound) {
+            case SUNK: case LOSE: return .30;
+            case WIN: return .28;
+            case LAUNCH: case HIT: case PING: return .26;
+            case TURN: return .20;
+            case WAVE: return .18;
+            case MISS: case SPLASH: return .16;
+            default: return .10;
+        }
+    }
+
     private static double duration(Sound sound) {
         switch (sound) {
             case CLICK: return .14;
             case SELECT: return .24;
-            case TURN: return .62;
-            case LAUNCH: return .62;
-            case MISS: return .52;
-            case HIT: return .58;
-            case SUNK: return 1.50;
-            case SPLASH: return .85;
-            case WAVE: return 1.30;
-            case PING: return 1.35;
-            case WIN: return 1.90;
-            default: return 1.70;
+            case TURN: return .70;
+            case LAUNCH: return .80;
+            case MISS: return .60;
+            case HIT: return .68;
+            case SUNK: return 1.75;
+            case SPLASH: return .95;
+            case WAVE: return 1.40;
+            case PING: return 1.85;
+            case WIN: return 2.30;
+            default: return 2.10;
         }
     }
 
@@ -440,7 +599,7 @@ public final class GameAudio {
         int seam = RATE / 2;
         short[] wave = new short[frames + seam];
         Random noise = new Random(9187);
-        double low = 0, deep = 0, foam = 0, phase = 0, drone = 0;
+        double low = 0, deep = 0, foam = 0, phase = 0, drone = 0, breeze = 0;
         for (int i = 0; i < wave.length; i++) {
             double t = i / (double) RATE;
             double p = (t % 4.0) / 4.0;
@@ -449,13 +608,16 @@ public final class GameAudio {
             low += .05 * (grain - low);
             deep += .010 * (grain - deep);
             foam += .30 * (grain - foam);
+            breeze += .12 * (grain - breeze);
             double rumble = (low - deep) * 3.0;
             phase += 2 * Math.PI * (44 + 6 * Math.sin(2 * Math.PI * p)) / RATE;
             drone += 2 * Math.PI * (55 + 3 * Math.sin(2 * Math.PI * .5 * p)) / RATE;
             double hiss = (grain - foam) * (.30 + .40 * surge) * .55;
-            double gull = gullCry(p, t);
+            double wind = breeze * (.22 + .34 * (.5 + .5 * Math.sin(2 * Math.PI * .5 * p)));
+            double lap = .10 * Math.sin(2 * Math.PI * 118 * t) * Math.pow(surge, 3);
+            double gull = gullCry(p, t, .60, .70, 1430, 420) + gullCry(p, t, .24, .33, 1180, 360);
             double horn = p > .78 && p < .93 ? .06 * Math.sin(2 * Math.PI * 138.6 * t) * Math.sin(Math.PI * (p - .78) / .15) : 0;
-            double value = (rumble * .75 + hiss * (.35 + .65 * surge) + Math.sin(phase) * .30 + Math.sin(drone) * .10) * (.44 + .56 * surge);
+            double value = (rumble * .75 + hiss * (.35 + .65 * surge) + Math.sin(phase) * .30 + Math.sin(drone) * .10 + wind + lap) * (.44 + .56 * surge);
             value = softLimit((value + gull + horn) * gain);
             wave[i] = (short) (Math.max(-1, Math.min(1, value)) * 7600);
         }
@@ -471,11 +633,11 @@ public final class GameAudio {
         return bytes;
     }
 
-    private static double gullCry(double p, double t) {
-        if (p <= .60 || p >= .70) {
+    private static double gullCry(double p, double t, double from, double to, double base, double fall) {
+        if (p <= from || p >= to) {
             return 0;
         }
-        double position = (p - .60) / .10;
-        return .10 * Math.sin(2 * Math.PI * (1430 - 420 * position) * t) * Math.sin(Math.PI * position);
+        double position = (p - from) / (to - from);
+        return .10 * Math.sin(2 * Math.PI * (base - fall * position) * t) * Math.sin(Math.PI * position);
     }
 }

@@ -74,14 +74,14 @@ public final class OceanScene {
     }
     public static int horizon(int height) { return Math.max(90, (int) (height * 0.30)); }
     private static void paintSun(Graphics2D g, int width, int height, int horizon) {
-        double cx = width * 0.78, cy = horizon - height * 0.10;
+        double cx = width * 0.70, cy = horizon - height * 0.10;
         float radius = (float) Math.max(width, height) * 0.34f;
         g.setPaint(new RadialGradientPaint(new Point2D.Double(cx, cy), radius, new float[] {0f, 0.18f, 1f},
-                new Color[] { alpha(Theme.SEA_SUN, 92), alpha(Theme.SEA_SUN, 34), alpha(Theme.SEA_SUN, 0) }));
+                new Color[] { alpha(Theme.SEA_SUN, 62), alpha(Theme.SEA_SUN, 22), alpha(Theme.SEA_SUN, 0) }));
         g.fill(new Ellipse2D.Double(cx - radius, cy - radius, radius * 2, radius * 2));
-        double disc = Math.max(14, height * 0.035);
-        g.setColor(alpha(Theme.SEA_SUN, 150)); g.fill(new Ellipse2D.Double(cx - disc, cy - disc, disc * 2, disc * 2));
-        g.setColor(alpha(Color.WHITE, 110)); g.fill(new Ellipse2D.Double(cx - disc * 0.5, cy - disc * 0.5, disc, disc));
+        double disc = Math.max(14, height * 0.032);
+        g.setColor(alpha(Theme.SEA_SUN, 96)); g.fill(new Ellipse2D.Double(cx - disc, cy - disc, disc * 2, disc * 2));
+        g.setColor(alpha(Color.WHITE, 58)); g.fill(new Ellipse2D.Double(cx - disc * 0.5, cy - disc * 0.5, disc, disc));
     }
     private static void paintIslands(Graphics2D g, int width, int horizon) {
         g.setColor(new Color(9, 42, 62, 190));

@@ -307,7 +307,7 @@ public class MatchResultView extends OceanPanel {
             Graphics2D wreck = (Graphics2D) g.create();
             wreck.translate(w * 0.5, h - 6 + sink);
             wreck.rotate(tilt);
-            OceanScene.paintShipSilhouette(wreck, 0, 0, 0.60, new Color(10, 20, 40, 225), new Color(150, 120, 170, 150));
+            OceanScene.paintShipSilhouette(wreck, 0, 0, 0.60, new Color(4, 20, 30, 228), new Color(150, 178, 196, 150));
             wreck.dispose();
             OceanScene.paintWaveRule(g, 12, h - 9, w - 24, t * 0.8, new Color(150, 190, 226), 0.30 * appear);
         }

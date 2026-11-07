@@ -21,7 +21,7 @@ public class PlacementPanel extends OceanPanel {
     private static final String[] SHIP_IDS = {"CARRIER", "BATTLESHIP", "CRUISER_1", "CRUISER_2", "DESTROYER"};
     private static final String[] SHIP_NAMES = {"Tàu sân bay", "Thiết giáp hạm", "Tuần dương I", "Tuần dương II", "Khu trục hạm"};
     private static final int[] SHIP_SIZES = GameConfig.SHIP_SIZES;
-    private static final Color[] SHIP_ACCENTS = {Theme.AZURE, Theme.ORCHID, Theme.MAGENTA, Theme.MINT, Theme.AMBER};
+    private static final Color[] SHIP_ACCENTS = {Theme.AZURE, Theme.PRIMARY, Theme.GOLD, Theme.MINT, Theme.ORCHID};
     private static final int SHIP_COUNT = 5;
     private static final int BOARD_LIMIT = GameConfig.BOARD_SIZE;
 
@@ -93,7 +93,7 @@ public class PlacementPanel extends OceanPanel {
         header.add(compass, BorderLayout.WEST);
 
         JPanel heading = Theme.stack();
-        Theme.SeaTitle title = new Theme.SeaTitle("Triển khai hạm đội", Theme.FONT_TITLE, Theme.MAGENTA, Theme.MINT);
+        Theme.SeaTitle title = new Theme.SeaTitle("Triển khai hạm đội", Theme.FONT_TITLE, Theme.SEA_FOAM, Theme.PRIMARY);
         title.setShimmer(true);
         Theme.addStack(heading, title, 5);
         Theme.addStack(heading, lblMatch, 2);

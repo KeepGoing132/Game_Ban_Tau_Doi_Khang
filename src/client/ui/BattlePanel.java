@@ -164,7 +164,7 @@ public class BattlePanel extends OceanPanel {
     private JPanel journal() {
         JPanel journal = Theme.seaCard(152, 14);
         journal.setLayout(new BorderLayout(12, 4));
-        journal.setPreferredSize(new Dimension(0, 104));
+        journal.setPreferredSize(new Dimension(0, 96));
         SeaDecor depth = new SeaDecor(SeaDecor.Kind.DEPTH);
         depth.setPreferredSize(new Dimension(46, 0));
         journal.add(depth, BorderLayout.WEST);

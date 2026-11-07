@@ -86,10 +86,10 @@ public class LoginFrame extends JFrame {
             g.fillRect(0, 0, w, h);
             float radius = Math.max(w, h) * 0.55f;
             g.setPaint(new java.awt.RadialGradientPaint(new java.awt.geom.Point2D.Double(w * 0.12, h * 0.16), radius,
-                    new float[] {0f, 1f}, new Color[] {new Color(87, 231, 208, 54), new Color(87, 231, 208, 0)}));
+                    new float[] {0f, 1f}, new Color[] {new Color(22, 199, 192, 58), new Color(22, 199, 192, 0)}));
             g.fillRect(0, 0, w, h);
             g.setPaint(new java.awt.RadialGradientPaint(new java.awt.geom.Point2D.Double(w * 0.92, h * 0.86), radius,
-                    new float[] {0f, 1f}, new Color[] {new Color(236, 126, 226, 46), new Color(236, 126, 226, 0)}));
+                    new float[] {0f, 1f}, new Color[] {new Color(79, 179, 217, 44), new Color(79, 179, 217, 0)}));
             g.fillRect(0, 0, w, h);
             g.dispose();
         }
