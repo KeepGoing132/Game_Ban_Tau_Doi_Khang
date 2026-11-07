@@ -247,8 +247,8 @@ public class LobbyFrame extends JFrame {
         for (final ModeTile tile : new ModeTile[]{human, machine, shipyard}) {
             tile.addActionListener(e -> setMode(tile.mode));
         }
-        modeTiles.setPreferredSize(new Dimension(0, 68));
-        modeTiles.setMaximumSize(new Dimension(Integer.MAX_VALUE, 68));
+        modeTiles.setPreferredSize(new Dimension(0, 132));
+        modeTiles.setMaximumSize(new Dimension(Integer.MAX_VALUE, 132));
 
         modeHost.add(humanBranch(), "human");
         modeHost.add(machineBranch(), "machine");
@@ -392,44 +392,21 @@ public class LobbyFrame extends JFrame {
         @Override protected void paintComponent(Graphics graphics) {
             Graphics2D g = Theme.graphics(graphics);
             int w = getWidth(), h = getHeight();
-            Color base = chosen ? Theme.blend(new Color(10, 46, 61), accent, .30f)
-                    : getModel().isRollover() ? new Color(20, 66, 82) : new Color(12, 52, 66);
-            g.setPaint(new GradientPaint(0, 0, Theme.blend(base, Color.WHITE, .06f), 0, h, base));
-            g.fillRoundRect(0, 0, w - 1, h - 1, 16, 16);
-            g.setColor(chosen ? accent : new Color(255, 255, 255, 26));
-            g.setStroke(new BasicStroke(chosen ? 1.8f : 1.2f));
-            g.drawRoundRect(0, 0, w - 1, h - 1, 16, 16);
-            paintGlyph(g, 18, h / 2, 15, accent);
+            int label = 42, inset = 3;
+            HubArt.paint(g, mode, inset, inset, w - inset * 2, h - label - 4,
+                    chosen ? 1 : getModel().isRollover() ? .55 : 0);
+            g.setColor(new Color(4, 20, 30, chosen ? 234 : 206));
+            g.fillRoundRect(inset, h - label - 6, w - inset * 2, label + 3, 12, 12);
             g.setFont(Theme.FONT_SMALL.deriveFont(Font.BOLD));
             g.setColor(chosen ? accent : Theme.TEXT_MAIN);
-            g.drawString(title, 42, h / 2 - 2);
+            g.drawString(title, 13, h - label + 15);
             g.setFont(Theme.FONT_SMALL);
             g.setColor(Theme.TEXT_MUTED);
-            g.drawString(subtitle, 42, h / 2 + 15);
+            g.drawString(subtitle, 13, h - 5);
+            g.setColor(chosen ? accent : new Color(255, 255, 255, 34));
+            g.setStroke(new BasicStroke(chosen ? 2f : 1.2f));
+            g.drawRoundRect(1, 1, w - 3, h - 3, 16, 16);
             g.dispose();
-        }
-
-        private void paintGlyph(Graphics2D g, int cx, int cy, int radius, Color accent) {
-            g.setColor(Theme.blend(accent, Theme.BG_DARK, .55f));
-            g.fillOval(cx - radius, cy - radius, radius * 2, radius * 2);
-            g.setColor(accent);
-            g.setStroke(new BasicStroke(1.6f));
-            g.drawOval(cx - radius, cy - radius, radius * 2, radius * 2);
-            if (mode == 0) {
-                g.drawLine(cx - 6, cy + 6, cx + 6, cy - 6);
-                g.drawLine(cx - 6, cy - 6, cx + 6, cy + 6);
-            } else if (mode == 1) {
-                g.drawRect(cx - 6, cy - 5, 12, 10);
-                g.drawLine(cx - 3, cy - 9, cx - 1, cy - 5);
-                g.drawLine(cx + 3, cy - 9, cx + 1, cy - 5);
-                g.fillOval(cx - 4, cy - 2, 3, 3);
-                g.fillOval(cx + 1, cy - 2, 3, 3);
-            } else {
-                int[] hullX = {cx - 7, cx - 3, cx + 7, cx + 7, cx - 3};
-                int[] hullY = {cy, cy - 5, cy - 5, cy + 5, cy + 5};
-                g.fillPolygon(hullX, hullY, 5);
-                g.drawLine(cx, cy, cx, cy - 8);
-            }
         }
     }
 
