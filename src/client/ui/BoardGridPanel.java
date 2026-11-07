@@ -538,17 +538,41 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             int left = position == min ? w / 7 : 0;
             int right = position == max ? w * 6 / 7 : w;
             int bowX = position == min ? left + w / 4 : left;
+            int[] hullX = {left, bowX, right, right, bowX};
+            int[] hullY = {cy, top, top, bottom, bottom};
+            g.setColor(new Color(3, 16, 24, 120));
+            g.fillPolygon(new int[]{hullX[0], hullX[1], hullX[2], hullX[3], hullX[4]},
+                    new int[]{hullY[0] + 2, hullY[1] + 2, hullY[2] + 2, hullY[3] + 2, hullY[4] + 2}, 5);
             g.setColor(new Color(226, 240, 248));
-            g.fillPolygon(new int[]{left, bowX, right, right, bowX}, new int[]{cy, top, top, bottom, bottom}, 5);
+            g.fillPolygon(hullX, hullY, 5);
+            g.setColor(new Color(120, 152, 174, 220));
+            g.setStroke(new BasicStroke(1.2f));
+            g.drawPolygon(hullX, hullY, 5);
             g.setColor(new Color(126, 158, 180));
             int deckX = position == min ? w / 3 : 0;
             int deckWidth = position == max ? w * 2 / 3 : w;
             g.fillRect(deckX, h / 3, deckWidth, h / 3);
+            g.setColor(new Color(96, 126, 148, 190));
+            g.drawLine(deckX, h * 2 / 3, deckX + deckWidth, h * 2 / 3);
+            g.setColor(new Color(94, 127, 150));
+            for (int turret = 0; turret < 2; turret++) {
+                double tx = w * (turret == 0 ? .22 : .78);
+                if (tx < left + 2 || tx > right - 2) {
+                    continue;
+                }
+                g.fill(new java.awt.geom.Ellipse2D.Double(tx - 2.4, cy - 2.4, 4.8, 4.8));
+            }
             if (position == min + (max - min) / 2) {
                 g.setColor(new Color(255, 255, 255));
                 g.fillRoundRect(w / 3, h / 3, w / 3, h / 3, 3, 3);
+                g.setColor(new Color(120, 152, 174));
+                g.setStroke(new BasicStroke(1.2f));
+                g.drawRoundRect(w / 3, h / 3, w / 3, h / 3, 3, 3);
+                g.setColor(new Color(255, 255, 255));
                 g.setStroke(new BasicStroke(2));
                 g.drawLine(w / 2, h / 2, w * 4 / 5, h / 2);
+                g.setStroke(new BasicStroke(1.4f));
+                g.drawLine(w / 2, (int) (h * 0.40), w / 2, (int) (h * 0.60));
             }
             if (rotated) {
                 g.rotate(-Math.PI / 2);
@@ -558,24 +582,41 @@ public class BoardGridPanel extends Theme.RoundedPanel {
 
         private void paintMarks(Graphics2D g, CellState state, int w, int h, int cx, int cy, boolean selected) {
             if (state == CellState.HIT || state == CellState.SUNK) {
-                g.setColor(Theme.DANGER);
-                g.setStroke(new BasicStroke(2));
-                int r = Math.max(4, w / 6);
-                g.drawLine(cx - r, cy - r, cx + r, cy + r);
-                g.drawLine(cx + r, cy - r, cx - r, cy + r);
+                double radius = Math.max(5, w * 0.30);
+                g.setPaint(new java.awt.RadialGradientPaint(new java.awt.geom.Point2D.Double(cx, cy), (float) radius,
+                        new float[] {0f, .52f, 1f},
+                        new Color[] {new Color(255, 246, 226), new Color(255, 150, 74), new Color(214, 52, 34, 0)}));
+                g.fill(new java.awt.geom.Ellipse2D.Double(cx - radius, cy - radius, radius * 2, radius * 2));
+                g.setColor(new Color(28, 12, 8, 130));
+                g.setStroke(new BasicStroke(1.6f));
+                int ray = (int) Math.max(6, w * 0.40), inner = (int) (radius * 0.45);
+                for (int i = 0; i < 4; i++) {
+                    double angle = Math.PI / 4 + i * Math.PI / 2;
+                    g.drawLine((int) (cx + Math.cos(angle) * inner), (int) (cy + Math.sin(angle) * inner),
+                            (int) (cx + Math.cos(angle) * ray), (int) (cy + Math.sin(angle) * ray));
+                }
+                g.setColor(new Color(255, 236, 210, 220));
+                g.fill(new java.awt.geom.Ellipse2D.Double(cx - 2.2, cy - 2.2, 4.4, 4.4));
                 if (state == CellState.SUNK) {
-                    g.drawOval(cx - r - 3, cy - r - 3, 2 * r + 6, 2 * r + 6);
+                    g.setColor(new Color(51, 71, 90, 190));
+                    g.fill(new java.awt.geom.Ellipse2D.Double(cx - radius * 1.25, cy - radius * 1.25, radius * 2.5, radius * 2.5));
+                    g.setColor(new Color(255, 194, 75, 235));
+                    g.setStroke(new BasicStroke(2f));
+                    g.draw(new java.awt.geom.Ellipse2D.Double(cx - radius * 1.25, cy - radius * 1.25, radius * 2.5, radius * 2.5));
+                    g.setColor(new Color(12, 26, 36, 150));
+                    g.setStroke(new BasicStroke(1.2f));
+                    for (int offset = -w; offset < w; offset += 6) {
+                        g.drawLine(cx + offset, cy - w, cx + offset + w, cy + w);
+                    }
                 }
             }
             if (state == CellState.MISS) {
-                g.setColor(new Color(226, 246, 255, 205));
-                g.fillOval(cx - 2, cy - 2, 5, 5);
-                g.setStroke(new BasicStroke(1.4f));
-                for (int i = 0; i < 4; i++) {
-                    double angle = Math.PI / 4 + i * Math.PI / 2;
-                    g.drawLine((int) (cx + Math.cos(angle) * 4), (int) (cy + Math.sin(angle) * 4),
-                            (int) (cx + Math.cos(angle) * 8), (int) (cy + Math.sin(angle) * 8));
-                }
+                g.setColor(new Color(207, 233, 245, 138));
+                g.setStroke(new BasicStroke(1.6f));
+                double ring = Math.max(5, w * 0.26);
+                g.draw(new java.awt.geom.Ellipse2D.Double(cx - ring, cy - ring, ring * 2, ring * 2));
+                g.setColor(new Color(207, 233, 245, 170));
+                g.fill(new java.awt.geom.Ellipse2D.Double(cx - 1.8, cy - 1.8, 3.6, 3.6));
             }
             if (state == CellState.PREVIEW_INVALID) {
                 g.setColor(Theme.DANGER);
@@ -609,13 +650,15 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
         BufferedImage tile = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = Theme.graphics(tile);
-        g.setPaint(new GradientPaint(0, 0, new Color(126, 236, 226, 58), (float) (w * .4), h, new Color(18, 68, 132, 94)));
+        g.setPaint(new GradientPaint(0, 0, new Color(30, 96, 114, 96), (float) (w * .45), h, new Color(7, 30, 44, 132)));
         g.fillRoundRect(0, 0, w - 1, h - 1, 5, 5);
-        g.setColor(new Color(214, 246, 255, 26));
+        g.setPaint(new GradientPaint(0, 0, new Color(255, 255, 255, 16), 0, h * .55f, new Color(255, 255, 255, 0)));
+        g.fillRoundRect(1, 1, w - 2, (int) (h * .55), 5, 5);
+        g.setColor(new Color(214, 246, 255, 22));
         int waterY = h * 2 / 3;
         g.drawLine(w / 4, waterY, w / 2, waterY);
         g.drawLine(w / 2, waterY + 2, w * 3 / 4, waterY + 2);
-        g.setColor(new Color(164, 224, 244, 46));
+        g.setColor(new Color(4, 20, 30, 150));
         g.drawRoundRect(0, 0, w - 1, h - 1, 5, 5);
         g.dispose();
         tileWidth = w;
