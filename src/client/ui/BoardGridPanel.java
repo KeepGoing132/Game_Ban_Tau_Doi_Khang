@@ -42,6 +42,10 @@ public class BoardGridPanel extends Theme.RoundedPanel {
     private boolean interactionEnabled;
     private boolean compact;
     private BufferedImage boardLayer;
+    private BufferedImage cellsLayer;
+    private int cellsWidth, cellsHeight;
+
+    private void invalidateCells() { cellsLayer = null; }
     private BufferedImage waterTile;
     private int layerWidth;
     private int layerHeight;
@@ -287,7 +291,8 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
         cellStates[x][y] = state;
         cellButtons[x][y].getAccessibleContext().setAccessibleName(coordinate(x, y) + " • " + STATE_NAMES[state.ordinal()]);
-        cellButtons[x][y].repaint();
+        invalidateCells();
+        repaint();
     }
 
     public CellState getCellState(int x, int y) {
@@ -333,7 +338,34 @@ public class BoardGridPanel extends Theme.RoundedPanel {
         }
         OceanScene.paintCaustics(g, 6, 6, w - 12, h - 12, t, compact ? .08 : .18);
         OceanScene.paintSonar(g, w / 2.0, h / 2.0, Math.min(w, h) * 0.52, t, 4.2, Theme.PRIMARY, 3, compact ? .14 : .22);
+        g.setClip(null);
+        paintCells(g, w, h);
         g.dispose();
+    }
+
+    private void paintCells(Graphics2D g, int w, int h) {
+        if (cellsLayer == null || cellsWidth != w || cellsHeight != h) {
+            cellsLayer = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_ARGB);
+            cellsWidth = w;
+            cellsHeight = h;
+            Graphics2D layers = Theme.graphics(cellsLayer);
+            for (int x = 0; x < SIZE; x++) {
+                for (int y = 0; y < SIZE; y++) {
+                    JButton cell = cellButtons[x][y];
+                    int cellWidth = cell.getWidth(), cellHeight = cell.getHeight();
+                    if (cellWidth < 2 || cellHeight < 2) {
+                        continue;
+                    }
+                    java.awt.Point origin = javax.swing.SwingUtilities.convertPoint(cell, 0, 0, this);
+                    Graphics2D cellGraphics = (Graphics2D) layers.create(origin.x, origin.y, cellWidth, cellHeight);
+                    cellGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    ((CellButton) cell).paintBase(cellGraphics, cellWidth, cellHeight);
+                    cellGraphics.dispose();
+                }
+            }
+            layers.dispose();
+        }
+        g.drawImage(cellsLayer, 0, 0, null);
     }
 
     private BufferedImage boardLayer(int w, int h) {
@@ -445,19 +477,40 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             paintComponent(graphics);
         }
 
-        @Override
-        protected void paintComponent(Graphics graphics) {
+        @Override protected void paintComponent(Graphics graphics) {
             Graphics2D g = (Graphics2D) graphics;
             g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             int w = getWidth(), h = getHeight();
             CellState state = cellStates[x][y];
+            boolean hover = state == CellState.WATER && getModel().isRollover() && interactionEnabled;
+            if (hover) {
+                g.setColor(new Color(96, 214, 236, 150));
+                g.fillRoundRect(0, 0, w - 1, h - 1, 5, 5);
+                g.setColor(Theme.CELL_WATER_HOVER);
+                g.drawRoundRect(0, 0, w - 1, h - 1, 5, 5);
+            }
             boolean selected = selectedCoordinate != null && selectedCoordinate.getX() == x && selectedCoordinate.getY() == y;
+            if (selected || hasFocus()) {
+                g.setColor(selected ? Theme.WARNING : Theme.PRIMARY);
+                g.setStroke(new BasicStroke(2));
+                g.drawRoundRect(1, 1, w - 3, h - 3, 5, 5);
+                if (selected) {
+                    int cx = w / 2, cy = h / 2;
+                    g.drawOval(cx - 6, cy - 6, 12, 12);
+                    g.drawLine(cx - 9, cy, cx + 9, cy);
+                    g.drawLine(cx, cy - 9, cx, cy + 9);
+                }
+            }
+        }
+
+        void paintBase(Graphics2D g, int w, int h) {
+            CellState state = cellStates[x][y];
             paintTileBackground(g, state, w, h);
             int cx = w / 2, cy = h / 2;
             if (state == CellState.SHIP) {
                 paintShip(g, w, h, cx, cy);
             }
-            paintMarks(g, state, w, h, cx, cy, selected);
+            paintMarks(g, state, w, h, cx, cy);
         }
 
         private void paintTileBackground(Graphics2D g, CellState state, int w, int h) {
@@ -485,22 +538,13 @@ public class BoardGridPanel extends Theme.RoundedPanel {
                     break;
             }
             boolean water = state == CellState.WATER;
-            boolean hover = water && getModel().isRollover() && interactionEnabled;
-            if (water && !hover) {
+            if (water) {
                 g.drawImage(waterTile(w, h), 0, 0, null);
-            } else if (!water) {
+            } else {
                 g.setPaint(new GradientPaint(0, 0, Theme.blend(fill, Color.WHITE, .10f), w, h, fill));
                 g.fillRoundRect(0, 0, w - 1, h - 1, 5, 5);
                 g.setColor(new Color(fill.getRed(), fill.getGreen(), fill.getBlue(), 120));
                 g.fillRect(3, h * 3 / 4, w - 6, 1);
-            }
-            if (hover) {
-                g.setColor(new Color(96, 214, 236, 150));
-                g.fillRoundRect(0, 0, w - 1, h - 1, 5, 5);
-                g.setColor(Theme.CELL_WATER_HOVER);
-                g.drawRoundRect(0, 0, w - 1, h - 1, 5, 5);
-            }
-            if (!water) {
                 g.setColor(Theme.blend(fill, Theme.TEXT_MUTED, .16f));
                 g.drawRoundRect(0, 0, w - 1, h - 1, 5, 5);
             }
@@ -580,7 +624,7 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             }
         }
 
-        private void paintMarks(Graphics2D g, CellState state, int w, int h, int cx, int cy, boolean selected) {
+        private void paintMarks(Graphics2D g, CellState state, int w, int h, int cx, int cy) {
             if (state == CellState.HIT || state == CellState.SUNK) {
                 double radius = Math.max(5, w * 0.30);
                 g.setPaint(new java.awt.RadialGradientPaint(new java.awt.geom.Point2D.Double(cx, cy), (float) radius,
@@ -622,16 +666,6 @@ public class BoardGridPanel extends Theme.RoundedPanel {
                 g.setColor(Theme.DANGER);
                 g.drawLine(cx - 4, cy - 4, cx + 4, cy + 4);
                 g.drawLine(cx + 4, cy - 4, cx - 4, cy + 4);
-            }
-            if (selected || hasFocus()) {
-                g.setColor(selected ? Theme.WARNING : Theme.PRIMARY);
-                g.setStroke(new BasicStroke(2));
-                g.drawRoundRect(1, 1, w - 3, h - 3, 5, 5);
-                if (selected) {
-                    g.drawOval(cx - 6, cy - 6, 12, 12);
-                    g.drawLine(cx - 9, cy, cx + 9, cy);
-                    g.drawLine(cx, cy - 9, cx, cy + 9);
-                }
             }
         }
     }
