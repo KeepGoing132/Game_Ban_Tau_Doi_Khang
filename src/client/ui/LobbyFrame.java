@@ -24,7 +24,7 @@ public class LobbyFrame extends JFrame {
     private final RankCard rankCard = new RankCard();
     private final java.awt.CardLayout modeLayout = new java.awt.CardLayout();
     private final JPanel modeHost = Theme.transparent(modeLayout);
-    private final JPanel modeTiles = Theme.transparent(new GridLayout(1, 3, 12, 0));
+    private final HubScene hubScene = new HubScene();
     private final JTextField txtFleetName = new JTextField();
     private final DefaultTableModel roomModel = new DefaultTableModel(new String[]{"Mã phòng", "Chủ phòng", "Điểm", "Chỗ"}, 0) {
         public boolean isCellEditable(int row, int column) {
@@ -254,23 +254,16 @@ public class LobbyFrame extends JFrame {
         Theme.addStack(head, lblQuickMatchStatus, 0);
         hub.add(head, BorderLayout.NORTH);
 
-        ModeTile human = new ModeTile(0, "ĐẤU VỚI NGƯỜI", "Tìm đối thủ hoặc mở phòng riêng", Theme.MINT);
-        ModeTile machine = new ModeTile(1, "ĐẤU VỚI MÁY", "Ba mức: Dễ · Thường · Khó", Theme.AMBER);
-        ModeTile shipyard = new ModeTile(2, "XƯỞNG CHIẾN HẠM", "Sơn màu và đặt tên hạm đội", Theme.ORCHID);
-        modeTiles.add(human); modeTiles.add(machine); modeTiles.add(shipyard);
-        for (final ModeTile tile : new ModeTile[]{human, machine, shipyard}) {
-            tile.addActionListener(e -> setMode(tile.mode));
-        }
-        modeTiles.setPreferredSize(new Dimension(0, 132));
-        modeTiles.setMaximumSize(new Dimension(Integer.MAX_VALUE, 132));
-
+        hubScene.setEntry(this::setMode);
+        hubScene.setPreferredSize(new Dimension(0, 300));
+        hubScene.setMaximumSize(new Dimension(Integer.MAX_VALUE, 300));
         modeHost.add(humanBranch(), "human");
         modeHost.add(machineBranch(), "machine");
         modeHost.add(shipyardBranch(), "shipyard");
         modeHost.setPreferredSize(new Dimension(0, 208));
         modeHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, 208));
         JPanel middle = Theme.stack();
-        Theme.addStack(middle, modeTiles, 12);
+        Theme.addStack(middle, hubScene, 10);
         Theme.addStack(middle, modeHost, 0);
         hub.add(middle, BorderLayout.CENTER);
         setMode(0);
@@ -280,9 +273,7 @@ public class LobbyFrame extends JFrame {
     private void setMode(int mode) {
         selectedMode = mode;
         modeLayout.show(modeHost, mode == 0 ? "human" : mode == 1 ? "machine" : "shipyard");
-        for (Component component : modeTiles.getComponents()) {
-            ((ModeTile) component).setSelectedMode(((ModeTile) component).mode == mode);
-        }
+        hubScene.setSelected(mode);
         if (mode == 0) {
             controller.requestRoomList();
             roomRefresh.start();
@@ -291,7 +282,7 @@ public class LobbyFrame extends JFrame {
         }
         modeHost.revalidate();
         modeHost.repaint();
-        modeTiles.repaint();
+        hubScene.repaint();
     }
 
     private JPanel humanBranch() {
@@ -439,52 +430,6 @@ public class LobbyFrame extends JFrame {
         }
     }
 
-    private static final class ModeTile extends JButton {
-        private final int mode;
-        private final String title, subtitle;
-        private final Color accent;
-        private boolean chosen;
-
-        ModeTile(int mode, String title, String subtitle, Color accent) {
-            this.mode = mode;
-            this.title = title;
-            this.subtitle = subtitle;
-            this.accent = accent;
-            setOpaque(false);
-            setContentAreaFilled(false);
-            setBorderPainted(false);
-            setFocusPainted(false);
-            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            setBorder(new EmptyBorder(10, 12, 10, 12));
-            setRolloverEnabled(true);
-            setText(title);
-            setToolTipText(subtitle);
-        }
-
-        void setSelectedMode(boolean value) {
-            chosen = value;
-        }
-
-        @Override protected void paintComponent(Graphics graphics) {
-            Graphics2D g = Theme.graphics(graphics);
-            int w = getWidth(), h = getHeight();
-            int label = 42, inset = 3;
-            HubArt.paint(g, mode, inset, inset, w - inset * 2, h - label - 4,
-                    chosen ? 1 : getModel().isRollover() ? .55 : 0);
-            g.setColor(new Color(4, 20, 30, chosen ? 234 : 206));
-            g.fillRoundRect(inset, h - label - 6, w - inset * 2, label + 3, 12, 12);
-            g.setFont(Theme.FONT_SMALL.deriveFont(Font.BOLD));
-            g.setColor(chosen ? accent : Theme.TEXT_MAIN);
-            g.drawString(title, 13, h - label + 15);
-            g.setFont(Theme.FONT_SMALL);
-            g.setColor(Theme.TEXT_MUTED);
-            g.drawString(subtitle, 13, h - 5);
-            g.setColor(chosen ? accent : new Color(255, 255, 255, 34));
-            g.setStroke(new BasicStroke(chosen ? 2f : 1.2f));
-            g.drawRoundRect(1, 1, w - 3, h - 3, 16, 16);
-            g.dispose();
-        }
-    }
 
     private JPanel onlineCard() {
         JPanel online = Theme.createCardPanel();
