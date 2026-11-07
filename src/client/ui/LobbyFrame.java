@@ -26,6 +26,20 @@ public class LobbyFrame extends JFrame {
     private final JPanel modeHost = Theme.transparent(modeLayout);
     private final JPanel modeTiles = Theme.transparent(new GridLayout(1, 3, 12, 0));
     private final JTextField txtFleetName = new JTextField();
+    private final DefaultTableModel roomModel = new DefaultTableModel(new String[]{"Mã phòng", "Chủ phòng", "Điểm", "Chỗ"}, 0) {
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+    private final JTable tblRooms = new JTable(roomModel);
+    private final JLabel lblRoomListStatus = Theme.muted("Đang tải danh sách phòng...");
+    private final javax.swing.Timer roomRefresh = new javax.swing.Timer(4000, e -> requestRooms());
+
+    private void requestRooms() {
+        if (controller != null) {
+            controller.requestRoomList();
+        }
+    }
     private JPanel fleetPreview;
     private JLabel shipyardStatus;
     private int selectedMode;
@@ -91,7 +105,7 @@ public class LobbyFrame extends JFrame {
         tblOnlineUsers = new JTable(tableModel);
 
         JPanel body = Theme.transparent(new BorderLayout(18, 0));
-        main.add(Theme.scrollPage(body, 466, Theme.BG_DARK), BorderLayout.CENTER);
+        main.add(Theme.scrollPage(body, 720, Theme.BG_DARK), BorderLayout.CENTER);
         JPanel left = Theme.transparent(new BorderLayout(0, 18));
         body.add(left, BorderLayout.CENTER);
         left.add(matchmakingCard(), BorderLayout.NORTH);
@@ -253,8 +267,8 @@ public class LobbyFrame extends JFrame {
         modeHost.add(humanBranch(), "human");
         modeHost.add(machineBranch(), "machine");
         modeHost.add(shipyardBranch(), "shipyard");
-        modeHost.setPreferredSize(new Dimension(0, 148));
-        modeHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, 148));
+        modeHost.setPreferredSize(new Dimension(0, 208));
+        modeHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, 208));
         JPanel middle = Theme.stack();
         Theme.addStack(middle, modeTiles, 12);
         Theme.addStack(middle, modeHost, 0);
@@ -269,6 +283,12 @@ public class LobbyFrame extends JFrame {
         for (Component component : modeTiles.getComponents()) {
             ((ModeTile) component).setSelectedMode(((ModeTile) component).mode == mode);
         }
+        if (mode == 0) {
+            controller.requestRoomList();
+            roomRefresh.start();
+        } else {
+            roomRefresh.stop();
+        }
         modeHost.revalidate();
         modeHost.repaint();
         modeTiles.repaint();
@@ -282,9 +302,65 @@ public class LobbyFrame extends JFrame {
         JPanel row = Theme.transparent(new BorderLayout());
         row.add(btnQuickMatch, BorderLayout.CENTER);
         row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
-        Theme.addStack(branch, row, 10);
-        Theme.addStack(branch, Theme.muted("Muốn đấu với bạn bè: tạo phòng riêng rồi gửi mã, hoặc nhập mã ở cột bên phải."), 0);
+        Theme.addStack(branch, row, 12);
+
+        JPanel head = Theme.transparent(new BorderLayout());
+        head.add(Theme.label("PHÒNG ĐANG MỞ", Theme.FONT_SMALL.deriveFont(Font.BOLD), Theme.SEA_HORIZON), BorderLayout.WEST);
+        JButton refresh = Theme.button("Làm mới", false);
+        refresh.setFont(Theme.FONT_SMALL);
+        refresh.setBorder(new EmptyBorder(5, 9, 5, 9));
+        refresh.addActionListener(e -> controller.requestRoomList());
+        head.add(refresh, BorderLayout.EAST);
+        head.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
+        Theme.addStack(branch, head, 6);
+
+        Theme.styleTable(tblRooms);
+        tblRooms.setRowHeight(26);
+        tblRooms.getTableHeader().setPreferredSize(new Dimension(0, 26));
+        tblRooms.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                int view = tblRooms.getSelectedRow();
+                if (view < 0 || !btnJoin.isEnabled()) {
+                    return;
+                }
+                Object code = roomModel.getValueAt(tblRooms.convertRowIndexToModel(view), 0);
+                if (code == null) {
+                    return;
+                }
+                txtRoomCode.setText(String.valueOf(code));
+                joinRoom();
+            }
+        });
+        JScrollPane scroll = Theme.scroll(tblRooms);
+        scroll.setPreferredSize(new Dimension(0, 76));
+        scroll.setMaximumSize(new Dimension(Integer.MAX_VALUE, 76));
+        Theme.addStack(branch, scroll, 6);
+        Theme.addStack(branch, lblRoomListStatus, 0);
         return branch;
+    }
+
+    public void updateRoomList(List<Object> rooms) {
+        roomModel.setRowCount(0);
+        int count = 0;
+        if (rooms != null) {
+            for (Object item : rooms) {
+                Map<String, Object> room = asMap(item);
+                if (room == null) {
+                    continue;
+                }
+                int players = JsonUtil.getInt(room, "players", 1);
+                int capacity = JsonUtil.getInt(room, "capacity", 2);
+                roomModel.addRow(new Object[] {
+                        JsonUtil.getString(room, "room_code", ""),
+                        JsonUtil.getString(room, "host_name", "Không rõ"),
+                        JsonUtil.getInt(room, "host_points", 0),
+                        players + "/" + capacity});
+                count++;
+            }
+        }
+        lblRoomListStatus.setText(count == 0
+                ? "Chưa có phòng nào đang mở — tạo phòng riêng rồi gửi mã cho bạn bè."
+                : count + " phòng đang mở, bấm một dòng để vào phòng đó.");
     }
 
     private JPanel machineBranch() {

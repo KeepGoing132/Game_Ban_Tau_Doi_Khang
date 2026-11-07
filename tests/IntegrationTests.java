@@ -33,6 +33,7 @@ public class IntegrationTests {
         long end=System.nanoTime()+TimeUnit.SECONDS.toNanos(5);while(server.getPort()<=0 && System.nanoTime()<end)Thread.sleep(5);int port=server.getPort();check(port>0,"server bound");
         try(SocketPeer a=new SocketPeer(port,true);SocketPeer b=new SocketPeer(port,true);SocketPeer c=new SocketPeer(port,true);SocketPeer d=new SocketPeer(port,true)){
             error(a,new Message(MessageType.CREATE_ROOM_REQ),"UNAUTHENTICATED");
+            error(a,new Message(MessageType.ROOM_LIST_REQ),"UNAUTHENTICATED");
             a.raw("{bad}\n{\"type\":\"NO_SUCH_TYPE\"}\n");check(a.waitType(MessageType.ERROR_NOTIFY).getErrorCode().equals("INVALID_MESSAGE"),"bad JSON");check(a.waitType(MessageType.ERROR_NOTIFY).getErrorCode().equals("UNKNOWN_TYPE"),"unknown type");
             String split=new Message(MessageType.HEARTBEAT_REQ).requestId("split").put("text","Tiếng Việt\n\"").toJson()+"\n";
             byte[] splitBytes=split.getBytes(StandardCharsets.UTF_8);
@@ -51,7 +52,15 @@ public class IntegrationTests {
             Message create=new Message(MessageType.CREATE_ROOM_REQ).requestId("create-once");Message cr=ok(a,create);Message replay=ok(a,create);check(cr.getData().equals(replay.getData()),"request replay room");
             error(a,new Message(MessageType.QUEUE_JOIN_REQ).requestId("create-once"),"INVALID_MESSAGE");String room=(String)cr.getData().get("room_id");
             error(a,new Message(MessageType.JOIN_ROOM_REQ).put("room_code",room),"INVALID_STATE");error(b,new Message(MessageType.JOIN_ROOM_REQ).put("room_code","BAD123"),"ROOM_NOT_FOUND");
+            List<Object> browsed=JsonUtil.getList(ok(c,new Message(MessageType.ROOM_LIST_REQ)).getData(),"rooms");
+            check(browsed!=null && browsed.size()==1,"an open room is offered in the room browser");
+            @SuppressWarnings("unchecked") Map<String,Object> listed=(Map<String,Object>)browsed.get(0);
+            check(room.equals(listed.get("room_code")),"the browsed room keeps its code");
+            check("alpha".equals(listed.get("host_name")),"the browsed room names its host");
+            check(JsonUtil.requireInt(listed,"players")==1 && JsonUtil.requireInt(listed,"capacity")==2,"the browsed room shows its free slot");
+            check(JsonUtil.requireInt(listed,"host_points")>=0,"the browsed room carries the host's points");
             ok(b,new Message(MessageType.JOIN_ROOM_REQ).put("room_code",room));Message joined=a.waitType(MessageType.ROOM_USER_JOINED);b.waitType(MessageType.ROOM_USER_JOINED);String placing=(String)joined.getData().get("match_id");
+            check(JsonUtil.getList(ok(c,new Message(MessageType.ROOM_LIST_REQ)).getData(),"rooms").isEmpty(),"a room in play leaves the browser");
             error(c,new Message(MessageType.JOIN_ROOM_REQ).put("room_code",room),"ROOM_FULL");
             int records=server.getStorage().getMatchRecords().size();ok(a,match(MessageType.LEAVE_ROOM_REQ,placing));a.waitType(MessageType.ROOM_USER_LEFT);b.waitType(MessageType.ROOM_USER_LEFT);check(server.getStorage().getMatchRecords().size()==records,"placing exit unscored");
             error(a,new Message(MessageType.INVITE_REQ).put("target_user_id",a.userId),"INVALID_STATE");

@@ -189,6 +189,8 @@ public class ClientHandler implements Runnable {
             }
             case CREATE_ROOM_REQ: lobby.createRoom(this);
             break;
+            case ROOM_LIST_REQ: lobby.roomList(this);
+            break;
             case JOIN_ROOM_REQ: lobby.joinRoom(JsonUtil.getString(d,"room_code",""),this);
             break;
             case LEAVE_ROOM_REQ:lobby.leave(this,msg,"SURRENDER");
@@ -231,6 +233,7 @@ public class ClientHandler implements Runnable {
             case LOGIN_REQ:return MessageType.LOGIN_RESP;
             case LOGOUT_REQ:return MessageType.LOGOUT_RESP;
             case CREATE_ROOM_REQ:return MessageType.CREATE_ROOM_RESP;
+            case ROOM_LIST_REQ:return MessageType.ROOM_LIST_RESP;
             case JOIN_ROOM_REQ:return MessageType.JOIN_ROOM_RESP;
             case LEAVE_ROOM_REQ:return MessageType.LEAVE_ROOM_RESP;
             case QUEUE_JOIN_REQ:return MessageType.QUEUE_JOIN_RESP;

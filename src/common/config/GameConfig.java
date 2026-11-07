@@ -5,6 +5,7 @@ public class GameConfig {
     public static final String DEFAULT_HOST = "localhost";
 
     public static final int BOARD_SIZE = 10;
+    public static final int ROOM_CAPACITY = 2;
     public static final int TURN_TIMEOUT_SECONDS = 15;
     public static final long TURN_TIMEOUT_MS = Long.getLong("battleship.turn_ms", 15000L);
     public static final long PLACEMENT_TIMEOUT_MS = Long.getLong("battleship.placement_ms", 120000L);

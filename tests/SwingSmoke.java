@@ -75,6 +75,13 @@ public class SwingSmoke {
             Thread.sleep(120);
             edt(()->{client.ui.FleetSkin.reset();});
             edt(()->clickField(field(a,"lobbyFrame"),"btnCreateRoom"));waitFor(()->present(a,"roomId"),"create room ack");
+            waitFor(()->{
+                Object lobby=field(b,"lobbyFrame");
+                JTable browser=(JTable)field(lobby,"tblRooms");
+                for(int row=0;row<browser.getRowCount();row++)if(field(a,"roomId").equals(browser.getValueAt(row,0)))return true;
+                return false;
+            },"the open room reaches the other player's browser");
+            edt(()->snapshot((Component)field(b,"lobbyFrame"),dir.resolve("room-browser.png")));
             edt(()->snapshot((Component)field(a,"lobbyFrame"),dir.resolve("room.png")));
             edt(()->{Object lobby=field(b,"lobbyFrame");((JTextField)field(lobby,"txtRoomCode")).setText(((String)field(a,"roomId")).toLowerCase(java.util.Locale.ROOT));clickField(lobby,"btnJoin");});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"join room placement");
             edt(()->{

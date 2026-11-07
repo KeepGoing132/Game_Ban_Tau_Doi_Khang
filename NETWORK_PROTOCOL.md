@@ -44,6 +44,7 @@ Các số x/y/size/user ID/turn_id phải là JSON integer, không phải chuỗ
 | GET_MATCH_DETAIL_REQ | match_id (String) | MATCH_DETAIL_RESP: match_id, opponent_id/name, won, points, reason, duration_seconds, ended_at_ms, my_shots, opponent_shots, my_ships[], opponent_ships[], shot_log[], replay_available |
 | CREATE_ROOM_REQ | {} | CREATE_ROOM_RESP: room_code, room_id |
 | JOIN_ROOM_REQ | room_code | JOIN_ROOM_RESP: room_id, match_id hoặc ERROR |
+| ROOM_LIST_REQ | {} | ROOM_LIST_RESP: rooms (mảng phòng đang chờ), count; mỗi phòng có room_code, host_id, host_name, host_points, players, capacity, status |
 | LEAVE_ROOM_REQ | match_id khi có trận; room_id khi phòng chờ | LEAVE_ROOM_RESP |
 | QUEUE_JOIN_REQ | {} | QUEUE_JOIN_RESP |
 | QUEUE_LEAVE_REQ | {} | QUEUE_LEAVE_RESP |

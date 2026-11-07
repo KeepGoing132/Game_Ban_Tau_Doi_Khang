@@ -87,6 +87,29 @@ public class LobbyManager {
         }
     }
 
+    public void roomList(ClientHandler requester) {
+        synchronized(lock) {
+            if(requester.getUser()==null)throw new DomainException("UNAUTHENTICATED","Hãy đăng nhập lại");
+            List<Object> open=new ArrayList<>();
+            for(Room room:rooms.values()) {
+                if(room.getStatus()!=Room.RoomStatus.WAITING || room.isFull())continue;
+                ClientHandler host=room.getHost();
+                if(!online(host))continue;
+                Map<String,Object> row=new LinkedHashMap<>();
+                row.put("room_code",room.getRoomCode());
+                row.put("host_id",host.getUser().getUserId());
+                row.put("host_name",host.getUser().getUsername());
+                row.put("host_points",host.getUser().getTotalPoints());
+                row.put("players",room.getGuest()==null?1:2);
+                row.put("capacity",GameConfig.ROOM_CAPACITY);
+                row.put("status",room.getStatus().name());
+                open.add(row);
+            }
+            open.sort((left,right)->((String)((Map<?,?>)left).get("room_code")).compareTo((String)((Map<?,?>)right).get("room_code")));
+            requester.reply(new Message(MessageType.ROOM_LIST_RESP).put("rooms",open).put("count",open.size()));
+        }
+    }
+
     public boolean joinRoom(String code,ClientHandler guest) {
         synchronized(lock) {
             users.requireCanMatch(guest);

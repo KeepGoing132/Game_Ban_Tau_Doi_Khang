@@ -239,6 +239,13 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         send(msg);
     }
 
+    public void requestRoomList() {
+        if (screen != Screen.LOBBY || currentUser == null) {
+            return;
+        }
+        send(new Message(MessageType.ROOM_LIST_REQ));
+    }
+
     public void joinQueue() {
         send(new Message(MessageType.QUEUE_JOIN_REQ));
     }
@@ -374,6 +381,7 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
             case JOIN_ROOM_RESP:
             case ROOM_USER_JOINED:
             case ROOM_USER_LEFT:
+            case ROOM_LIST_RESP:
             case MATCH_FOUND:
             case INVITE_NOTIFY:
             case INVITE_RESULT:
@@ -548,6 +556,10 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
             case ROOM_USER_LEFT: {
                 exitToLobby();
                 if(lobbyFrame!=null)lobbyFrame.showStatus(msg.getMessage(),false);
+                break;
+            }
+            case ROOM_LIST_RESP: {
+                if (lobbyFrame != null) lobbyFrame.updateRoomList(JsonUtil.getList(msg.getData(), "rooms"));
                 break;
             }
             case MATCH_FOUND: {

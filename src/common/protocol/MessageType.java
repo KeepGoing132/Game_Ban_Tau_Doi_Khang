@@ -21,6 +21,8 @@ public enum MessageType {
     LEAVE_ROOM_REQ,
     ROOM_USER_JOINED,
     ROOM_USER_LEFT,
+    ROOM_LIST_REQ,
+    ROOM_LIST_RESP,
 
     INVITE_REQ,
     INVITE_NOTIFY,
