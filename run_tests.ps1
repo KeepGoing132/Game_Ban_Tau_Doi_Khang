@@ -16,7 +16,7 @@ try {
     # after-action report and the screenshot taken from it all fit before the offer expires.
     # The versus screen is a real flow step, so it stays on screen long enough to be asserted and
     # captured, just far shorter than the 2.6 s players see.
-    $javaFlags = @('-Dfile.encoding=UTF-8','-Dbattleship.idle_ms=2500','-Dbattleship.heartbeat_ms=500','-Dbattleship.invite_ms=700','-Dbattleship.rematch_ms=4000','-Dbattleship.vs_ms=700')
+    $javaFlags = @('-Dfile.encoding=UTF-8','-Dbattleship.idle_ms=2500','-Dbattleship.heartbeat_ms=500','-Dbattleship.invite_ms=700','-Dbattleship.rematch_ms=4000','-Dbattleship.vs_ms=700','-Dbattleship.entrance_ms=700')
     # A compressed turn window must stay longer than one shell-impact animation (0.82 s, sunken
     # 1.18 s) plus a click round trip, otherwise the server times out a shooter who is still
     # watching the explosion and the GUI scripts stall.

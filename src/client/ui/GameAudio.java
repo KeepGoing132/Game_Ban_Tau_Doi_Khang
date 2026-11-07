@@ -194,11 +194,11 @@ public final class GameAudio {
             double value;
             switch (sound) {
                 case CLICK:
-                    phase += 2 * Math.PI * pitch * (1720 - 520 * p) / RATE;
-                    phase2 += 2 * Math.PI * pitch * 640 / RATE;
-                    value = .62 * Math.sin(phase) * Math.exp(-42 * t)
-                            + .30 * Math.sin(phase2) * Math.exp(-26 * t)
-                            + .18 * hiss * Math.exp(-55 * t);
+                    phase += 2 * Math.PI * pitch * (1480 - 420 * p) / RATE;
+                    phase2 += 2 * Math.PI * pitch * 620 / RATE;
+                    value = .52 * Math.sin(phase) * Math.exp(-30 * t)
+                            + .26 * Math.sin(phase2) * Math.exp(-20 * t)
+                            + .10 * hiss * Math.exp(-45 * t);
                     break;
                 case SELECT:
                     phase += 2 * Math.PI * pitch * (1180 + 260 * smooth(p * 1.6)) / RATE;
@@ -219,7 +219,7 @@ public final class GameAudio {
                 case LAUNCH: {
                     phase += 2 * Math.PI * pitch * (150 - 112 * smooth(p * 1.3)) / RATE;
                     phase2 += 2 * Math.PI * pitch * (1500 + 420 * Math.sin(2 * Math.PI * 6.5 * t)) / RATE;
-                    double crack = .78 * (grain - hiss) * Math.exp(-46 * t);
+                    double crack = .58 * (grain - hiss) * Math.exp(-38 * t);
                     double boom = .92 * Math.sin(phase) * Math.exp(-4.6 * t);
                     double body = rumble * 3.4 * Math.exp(-3.2 * t);
                     double whistle = .30 * Math.sin(phase2) * smooth((t - .055) / .09)
@@ -239,9 +239,9 @@ public final class GameAudio {
                     phase += 2 * Math.PI * pitch * (170 - 120 * smooth(p * 1.35)) / RATE;
                     phase2 += 2 * Math.PI * pitch * 620 / RATE;
                     phase3 += 2 * Math.PI * pitch * 1310 / RATE;
-                    double kick = .45 * hiss * Math.exp(-34 * t);
+                    double kick = .36 * hiss * Math.exp(-30 * t);
                     double blast = .86 * Math.sin(phase) * Math.exp(-5.4 * t);
-                    double steel = (.24 * Math.sin(phase2) + .16 * Math.sin(phase3) + .10 * Math.sin(1.5 * phase2)) * Math.exp(-7.5 * t);
+                    double steel = (.18 * Math.sin(phase2) + .12 * Math.sin(phase3) + .08 * Math.sin(1.5 * phase2)) * Math.exp(-7.5 * t);
                     value = kick + blast + steel + .30 * rumble * 3 * Math.exp(-3 * t);
                     break;
                 }

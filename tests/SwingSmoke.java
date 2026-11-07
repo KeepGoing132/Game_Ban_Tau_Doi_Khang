@@ -50,6 +50,9 @@ public class SwingSmoke {
                 TestRunner.check(((JButton)field(frame,"btnLogin")).isEnabled(),"validation keeps form usable");
             });
             login(a,server.getPort(),"gui_a");login(b,server.getPort(),"gui_b");
+            waitFor(()->{for(Window w:Window.getWindows())if(w instanceof client.ui.LobbyEntrance && w.isShowing())return true;return false;},"lobby entrance shown");
+            Thread.sleep(220);
+            edt(()->{for(Window w:Window.getWindows())if(w instanceof client.ui.LobbyEntrance && w.isShowing())snapshot(w,dir.resolve("lobby-entrance.png"));});
             waitFor(()->((JTable)field(field(a,"lobbyFrame"),"tblOnlineUsers")).getRowCount()==1,"opponent visible in lobby");
             edt(()->{snapshot((Component)field(a,"lobbyFrame"),dir.resolve("lobby.png"));snapshotMinimum((JFrame)field(a,"lobbyFrame"),dir.resolve("lobby-small.png"));});
             edt(()->clickField(field(a,"lobbyFrame"),"btnCreateRoom"));waitFor(()->present(a,"roomId"),"create room ack");

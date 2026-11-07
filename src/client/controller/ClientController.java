@@ -119,6 +119,7 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
     private MatchHistoryDialog historyDialog;
     private MatchReplayDialog replayDialog;
     private VersusScreen versusScreen;
+    private LobbyEntrance lobbyEntrance;
     private long pendingPlacementDeadline;
     private long pendingPlacementServerTime;
     private long pendingPlacementReceivedNanos;
@@ -434,6 +435,7 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
                     applyPenalty(msg.getData());
                     lobbyFrame.setLifecycle(JsonUtil.getString(msg.getData(),"phase","IDLE"));
                     lobbyFrame.setVisible(true);
+                    showLobbyEntrance();
                     closeChat();
                     chat=new ChatController(currentUser.getUserId(),this::send);
                     chat.attach(lobbyFrame);
@@ -807,6 +809,24 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
             fleet.add(new Ship(id, size, cells));
         }
         return fleet.isEmpty() ? null : fleet;
+    }
+
+    private void showLobbyEntrance() {
+        if (currentUser == null || lobbyFrame == null) {
+            return;
+        }
+        closeLobbyEntrance();
+        String channel = "Kênh 1 • Hải phận Đông";
+        lobbyEntrance = new LobbyEntrance(lobbyFrame, currentUser.getUsername(), currentUser.getTotalPoints(), channel,
+                this::closeLobbyEntrance);
+        lobbyEntrance.setVisible(true);
+    }
+
+    private void closeLobbyEntrance() {
+        if (lobbyEntrance != null) {
+            lobbyEntrance.dispose();
+            lobbyEntrance = null;
+        }
     }
 
     private void showVersusScreen() {

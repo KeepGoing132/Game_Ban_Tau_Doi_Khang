@@ -4,7 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 
 public class OceanPanel extends JPanel {
-    private static final int IDLE_DELAY_MS = 50, INTRO_DELAY_MS = 40;
+    private static final int IDLE_DELAY_MS = 33, INTRO_DELAY_MS = 25;
     private static final int IDLE_DELAY_SLOW_MS = 200, INTRO_DELAY_SLOW_MS = 110;
     private static final int MAX_DELAY_MS = 220;
     private static final String[] SEA_STATES = {
@@ -33,6 +33,7 @@ public class OceanPanel extends JPanel {
         seaTimer.setCoalesce(true);
     }
     public JLabel seaState() { return seaState; }
+    public String currentSeaState() { return seaState.getText(); }
     public void setIntroSubtitle(String text) { introSubtitle = text; }
     public boolean isIntroPlaying() { return !introFinished && introStartedNanos != 0; }
     public void finishIntro() { introFinished = true; introStartedNanos = 0; if (seaTimer.isRunning()) seaTimer.setDelay(IDLE_DELAY_MS); repaint(); }
