@@ -14,17 +14,17 @@ public final class HubArt {
         Graphics2D g2 = (Graphics2D) g.create(x, y, w, h);
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.clip(new RoundRectangle2D.Double(0, 0, w, h, 12, 12));
-        Color sky = kind == 0 ? new Color(24, 74, 88) : kind == 1 ? new Color(18, 62, 84) : new Color(26, 84, 92);
-        g2.setPaint(new GradientPaint(0, 0, Theme.blend(sky, Color.WHITE, .10f), 0, h, new Color(5, 24, 34)));
+        Color sky = kind == 0 ? new Color(126, 208, 226) : kind == 1 ? new Color(112, 196, 224) : new Color(140, 214, 222);
+        g2.setPaint(new GradientPaint(0, 0, new Color(226, 246, 250), 0, h, sky));
         g2.fillRect(0, 0, w, h);
         int water = (int) (h * 0.70);
-        g2.setPaint(new GradientPaint(0, water, new Color(14, 92, 108), 0, h, new Color(4, 26, 38)));
+        g2.setPaint(new GradientPaint(0, water, new Color(24, 150, 190), 0, h, new Color(10, 92, 138)));
         g2.fillRect(0, water, w, h - water);
-        g2.setColor(new Color(120, 210, 226, 60));
+        g2.setColor(new Color(255, 255, 255, 90));
         for (int i = 0; i < 3; i++) {
             g2.drawLine(0, water + 6 + i * 7, w, water + 6 + i * 7);
         }
-        g2.setColor(new Color(99, 230, 222, 120));
+        g2.setColor(new Color(255, 246, 214, 170));
         g2.drawLine(0, water, w, water);
         switch (kind) {
             case 0: paintArena(g2, w, h, water); break;

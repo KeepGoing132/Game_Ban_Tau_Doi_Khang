@@ -105,7 +105,7 @@ public class LobbyFrame extends JFrame {
         tblOnlineUsers = new JTable(tableModel);
 
         JPanel body = Theme.transparent(new BorderLayout(18, 0));
-        main.add(Theme.scrollPage(body, 720, Theme.BG_DARK), BorderLayout.CENTER);
+        main.add(Theme.scrollPage(body, 1280, Theme.BG_DARK), BorderLayout.CENTER);
         JPanel left = Theme.transparent(new BorderLayout(0, 18));
         body.add(left, BorderLayout.CENTER);
         left.add(matchmakingCard(), BorderLayout.NORTH);
@@ -256,12 +256,12 @@ public class LobbyFrame extends JFrame {
 
         hubScene.setEntry(this::setMode);
         hubScene.setPreferredSize(new Dimension(0, 300));
-        hubScene.setMaximumSize(new Dimension(Integer.MAX_VALUE, 300));
         modeHost.add(humanBranch(), "human");
         modeHost.add(machineBranch(), "machine");
         modeHost.add(shipyardBranch(), "shipyard");
-        modeHost.setPreferredSize(new Dimension(0, 208));
-        modeHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, 208));
+        modeHost.setPreferredSize(new Dimension(0, 252));
+        modeHost.setMinimumSize(new Dimension(0, 252));
+        modeHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, 252));
         JPanel middle = Theme.stack();
         Theme.addStack(middle, hubScene, 10);
         Theme.addStack(middle, modeHost, 0);
