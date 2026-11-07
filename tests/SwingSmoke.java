@@ -55,6 +55,25 @@ public class SwingSmoke {
             edt(()->{for(Window w:Window.getWindows())if(w instanceof client.ui.LobbyEntrance && w.isShowing())snapshot(w,dir.resolve("lobby-entrance.png"));});
             waitFor(()->((JTable)field(field(a,"lobbyFrame"),"tblOnlineUsers")).getRowCount()==1,"opponent visible in lobby");
             edt(()->{snapshot((Component)field(a,"lobbyFrame"),dir.resolve("lobby.png"));snapshotMinimum((JFrame)field(a,"lobbyFrame"),dir.resolve("lobby-small.png"));});
+            edt(()->{
+                Object lobby=field(a,"lobbyFrame");
+                JButton shipyard=button((Container)lobby,"XƯỞNG CHIẾN HẠM");
+                TestRunner.check(shipyard!=null,"the lobby hub offers the shipyard branch");
+                shipyard.doClick(0);
+            });
+            Thread.sleep(140);
+            edt(()->snapshot((Component)field(a,"lobbyFrame"),dir.resolve("lobby-shipyard.png")));
+            edt(()->{
+                Object lobby=field(a,"lobbyFrame");
+                JButton amber=button((Container)lobby,"Hổ Phách");
+                TestRunner.check(amber!=null,"the shipyard lists fleet schemes");
+                amber.doClick(0);
+                TestRunner.check(client.ui.FleetSkin.index()>0,"picking a scheme paints the fleet");
+                button((Container)lobby,"ĐẤU VỚI NGƯỜI").doClick(0);
+            });
+            edt(()->{button((Container)field(a,"lobbyFrame"),"ĐẤU VỚI NGƯỜI").doClick(0);});
+            Thread.sleep(120);
+            edt(()->{client.ui.FleetSkin.reset();});
             edt(()->clickField(field(a,"lobbyFrame"),"btnCreateRoom"));waitFor(()->present(a,"roomId"),"create room ack");
             edt(()->snapshot((Component)field(a,"lobbyFrame"),dir.resolve("room.png")));
             edt(()->{Object lobby=field(b,"lobbyFrame");((JTextField)field(lobby,"txtRoomCode")).setText(((String)field(a,"roomId")).toLowerCase(java.util.Locale.ROOT));clickField(lobby,"btnJoin");});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"join room placement");

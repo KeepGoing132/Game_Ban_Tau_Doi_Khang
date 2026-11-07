@@ -44,8 +44,20 @@ public class BoardGridPanel extends Theme.RoundedPanel {
     private BufferedImage boardLayer;
     private BufferedImage cellsLayer;
     private int cellsWidth, cellsHeight;
+    private int cellsSkinVersion = -1;
+    private boolean skinned;
+    private boolean cachedSkinned;
 
     private void invalidateCells() { cellsLayer = null; }
+
+    public void setSkinnedFleet(boolean value) {
+        if (skinned == value) {
+            return;
+        }
+        skinned = value;
+        invalidateCells();
+        repaint();
+    }
     private BufferedImage waterTile;
     private int layerWidth;
     private int layerHeight;
@@ -344,10 +356,13 @@ public class BoardGridPanel extends Theme.RoundedPanel {
     }
 
     private void paintCells(Graphics2D g, int w, int h) {
-        if (cellsLayer == null || cellsWidth != w || cellsHeight != h) {
+        if (cellsLayer == null || cellsWidth != w || cellsHeight != h
+                || cellsSkinVersion != FleetSkin.version() || cachedSkinned != skinned) {
             cellsLayer = new BufferedImage(Math.max(1, w), Math.max(1, h), BufferedImage.TYPE_INT_ARGB);
             cellsWidth = w;
             cellsHeight = h;
+            cellsSkinVersion = FleetSkin.version();
+            cachedSkinned = skinned;
             Graphics2D layers = Theme.graphics(cellsLayer);
             for (int x = 0; x < SIZE; x++) {
                 for (int y = 0; y < SIZE; y++) {
@@ -582,23 +597,29 @@ public class BoardGridPanel extends Theme.RoundedPanel {
             int left = position == min ? w / 7 : 0;
             int right = position == max ? w * 6 / 7 : w;
             int bowX = position == min ? left + w / 4 : left;
+            FleetSkin.Scheme scheme = FleetSkin.current();
+            Color hullFill = skinned ? scheme.hull() : new Color(226, 240, 248);
+            Color hullLine = skinned ? scheme.hullDark() : new Color(120, 152, 174, 220);
+            Color deckFill = skinned ? scheme.deck() : new Color(126, 158, 180);
+            Color deckLine = skinned ? scheme.hullDark() : new Color(96, 126, 148, 190);
+            Color trim = skinned ? scheme.trim() : new Color(255, 255, 255);
             int[] hullX = {left, bowX, right, right, bowX};
             int[] hullY = {cy, top, top, bottom, bottom};
             g.setColor(new Color(3, 16, 24, 120));
             g.fillPolygon(new int[]{hullX[0], hullX[1], hullX[2], hullX[3], hullX[4]},
                     new int[]{hullY[0] + 2, hullY[1] + 2, hullY[2] + 2, hullY[3] + 2, hullY[4] + 2}, 5);
-            g.setColor(new Color(226, 240, 248));
+            g.setColor(hullFill);
             g.fillPolygon(hullX, hullY, 5);
-            g.setColor(new Color(120, 152, 174, 220));
+            g.setColor(hullLine);
             g.setStroke(new BasicStroke(1.2f));
             g.drawPolygon(hullX, hullY, 5);
-            g.setColor(new Color(126, 158, 180));
+            g.setColor(deckFill);
             int deckX = position == min ? w / 3 : 0;
             int deckWidth = position == max ? w * 2 / 3 : w;
             g.fillRect(deckX, h / 3, deckWidth, h / 3);
-            g.setColor(new Color(96, 126, 148, 190));
+            g.setColor(deckLine);
             g.drawLine(deckX, h * 2 / 3, deckX + deckWidth, h * 2 / 3);
-            g.setColor(new Color(94, 127, 150));
+            g.setColor(deckFill);
             for (int turret = 0; turret < 2; turret++) {
                 double tx = w * (turret == 0 ? .22 : .78);
                 if (tx < left + 2 || tx > right - 2) {
@@ -607,12 +628,12 @@ public class BoardGridPanel extends Theme.RoundedPanel {
                 g.fill(new java.awt.geom.Ellipse2D.Double(tx - 2.4, cy - 2.4, 4.8, 4.8));
             }
             if (position == min + (max - min) / 2) {
-                g.setColor(new Color(255, 255, 255));
+                g.setColor(trim);
                 g.fillRoundRect(w / 3, h / 3, w / 3, h / 3, 3, 3);
-                g.setColor(new Color(120, 152, 174));
+                g.setColor(hullLine);
                 g.setStroke(new BasicStroke(1.2f));
                 g.drawRoundRect(w / 3, h / 3, w / 3, h / 3, 3, 3);
-                g.setColor(new Color(255, 255, 255));
+                g.setColor(trim);
                 g.setStroke(new BasicStroke(2));
                 g.drawLine(w / 2, h / 2, w * 4 / 5, h / 2);
                 g.setStroke(new BasicStroke(1.4f));

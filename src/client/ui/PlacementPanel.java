@@ -65,6 +65,7 @@ public class PlacementPanel extends OceanPanel {
         add(header(), BorderLayout.NORTH);
 
         gridPanel = new BoardGridPanel("HẢI PHẬN CỦA BẠN", true);
+        gridPanel.setSkinnedFleet(true);
         gridPanel.setCaption("Rê chuột để xem trước  •  Nhấn R để xoay tàu");
         add(gridPanel, BorderLayout.CENTER);
 

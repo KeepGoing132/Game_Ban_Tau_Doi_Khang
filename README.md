@@ -121,7 +121,7 @@ Test tự tạo thư mục `%TEMP%/battleship-*`, chọn cổng riêng bằng po
 ## Kịch bản demo
 
 1. Chạy server và mở ít nhất ba client bằng ba tài khoản khác nhau. Quan sát danh sách online; thử đăng nhập tài khoản đang dùng ở client thứ tư: phải bị từ chối.
-2. Client A tạo phòng, lấy mã sáu ký tự; B nhập mã. Hai người chuyển sang bố trí tàu, người quan sát thấy BUSY. Thử mã sai và tự join để thấy lỗi.
+2. Client A chọn nhánh **Đấu với người** rồi tạo phòng, lấy mã sáu ký tự; B nhập mã. Hai người chuyển sang bố trí tàu, người quan sát thấy BUSY. Thử mã sai và tự join để thấy lỗi. Nhánh **Đấu với máy** có ba mức Dễ / Thường / Khó; nhánh **Xưởng chiến hạm** cho sơn màu và đặt tên hạm đội của bạn.
 3. Rời màn hình đặt tàu bằng nút **× THOÁT VỀ SẢNH** (hoặc phím **ESC**, hoặc đóng cửa sổ): cả hai về sảnh, không cộng điểm và không bị phạt. Thử tiếp bằng lời mời Accept/Reject, rồi Quick Match; thử hủy tìm trận trước khi có người thứ hai.
 4. Khi tìm thấy đối thủ, màn hình **VS** mở ra: hai thẻ chỉ huy trượt vào từ hai bên kèm huy hiệu cấp bậc, điểm số và thanh tiến độ lên cấp, ở giữa là đếm ngược rồi tự chuyển sang màn bố trí tàu (có thể bấm hoặc ESC để vào ngay). Đặt đúng 5 tàu `[5,4,3,3,2]`; có thể dùng Xếp tàu ngẫu nhiên. Bấm Ready: chờ xác nhận server rồi khóa sửa tàu. Thử Hủy sẵn sàng trước khi đối thủ Ready, sửa rồi Ready lại.
 5. Cả hai Ready: chỉ có một người được bắn trước. Chọn ô rồi Bắn. HIT/SUNK giữ lượt, MISS đổi lượt. Đợi 15 giây không bắn: mất lượt, không có phát bắn tự động.

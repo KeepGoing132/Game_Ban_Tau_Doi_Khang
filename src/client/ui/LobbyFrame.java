@@ -22,6 +22,19 @@ public class LobbyFrame extends JFrame {
     private final JLabel lblWins = Theme.label("0", Theme.FONT_TITLE, Theme.TEXT_MAIN);
     private final JLabel lblRate = Theme.label("0%", Theme.FONT_TITLE, Theme.TEXT_MAIN);
     private final RankCard rankCard = new RankCard();
+    private final java.awt.CardLayout modeLayout = new java.awt.CardLayout();
+    private final JPanel modeHost = Theme.transparent(modeLayout);
+    private final JPanel modeTiles = Theme.transparent(new GridLayout(1, 3, 12, 0));
+    private final JTextField txtFleetName = new JTextField();
+    private JPanel fleetPreview;
+    private JLabel shipyardStatus;
+    private int selectedMode;
+
+    private static javax.swing.border.Border swatchBorder(boolean chosen) {
+        return BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(chosen ? Theme.PRIMARY : Theme.BORDER_COLOR, chosen ? 2 : 1),
+                new EmptyBorder(6, 8, 6, 8));
+    }
     private final JLabel lblOnlineCount = Theme.muted("Đang cập nhật hạm đội...");
     private final JLabel lblFeedback = Theme.muted("Chọn ghép trận nhanh hoặc mời một người bạn.");
     private final JLabel lblPenalty = Theme.badge(" ", Theme.WARNING);
@@ -219,23 +232,205 @@ public class LobbyFrame extends JFrame {
     }
 
     private JPanel matchmakingCard() {
-        JPanel queue = Theme.vividCard(new Color(10, 62, 74), new Color(14, 104, 112), 22);
-        queue.setLayout(new BorderLayout(12, 12));
-        JPanel text = Theme.stack();
-        Theme.addStack(text, Theme.badge("CHỌN ĐỐI THỦ", Theme.MINT), 12);
-        Theme.addStack(text, Theme.label("Sẵn sàng khai hỏa?", Theme.FONT_TITLE.deriveFont(25f), Theme.SEA_FOAM), 7);
-        Theme.addStack(text, lblQuickMatchStatus, 16);
-        btnQuickMatch.addActionListener(e -> toggleMatchmakingQueue());
-        btnBot.addActionListener(e -> botDialog());
+        JPanel hub = Theme.vividCard(new Color(10, 62, 74), new Color(14, 104, 112), 20);
+        hub.setLayout(new BorderLayout(0, 12));
+        JPanel head = Theme.stack();
+        Theme.addStack(head, Theme.badge("SẢNH CHỜ", Theme.MINT), 10);
+        Theme.addStack(head, Theme.label("Chọn chế độ ra khơi", Theme.FONT_TITLE.deriveFont(24f), Theme.SEA_FOAM), 6);
+        Theme.addStack(head, lblQuickMatchStatus, 0);
+        hub.add(head, BorderLayout.NORTH);
+
+        ModeTile human = new ModeTile(0, "ĐẤU VỚI NGƯỜI", "Tìm đối thủ hoặc mở phòng riêng", Theme.MINT);
+        ModeTile machine = new ModeTile(1, "ĐẤU VỚI MÁY", "Ba mức: Dễ · Thường · Khó", Theme.AMBER);
+        ModeTile shipyard = new ModeTile(2, "XƯỞNG CHIẾN HẠM", "Sơn màu và đặt tên hạm đội", Theme.ORCHID);
+        modeTiles.add(human); modeTiles.add(machine); modeTiles.add(shipyard);
+        for (final ModeTile tile : new ModeTile[]{human, machine, shipyard}) {
+            tile.addActionListener(e -> setMode(tile.mode));
+        }
+        modeTiles.setPreferredSize(new Dimension(0, 68));
+        modeTiles.setMaximumSize(new Dimension(Integer.MAX_VALUE, 68));
+
+        modeHost.add(humanBranch(), "human");
+        modeHost.add(machineBranch(), "machine");
+        modeHost.add(shipyardBranch(), "shipyard");
+        modeHost.setPreferredSize(new Dimension(0, 148));
+        modeHost.setMaximumSize(new Dimension(Integer.MAX_VALUE, 148));
+        JPanel middle = Theme.stack();
+        Theme.addStack(middle, modeTiles, 12);
+        Theme.addStack(middle, modeHost, 0);
+        hub.add(middle, BorderLayout.CENTER);
+        setMode(0);
+        return hub;
+    }
+
+    private void setMode(int mode) {
+        selectedMode = mode;
+        modeLayout.show(modeHost, mode == 0 ? "human" : mode == 1 ? "machine" : "shipyard");
+        for (Component component : modeTiles.getComponents()) {
+            ((ModeTile) component).setSelectedMode(((ModeTile) component).mode == mode);
+        }
+        modeHost.revalidate();
+        modeHost.repaint();
+        modeTiles.repaint();
+    }
+
+    private JPanel humanBranch() {
+        JPanel branch = Theme.stack();
         Theme.styleButton(btnQuickMatch, Theme.MINT, Theme.BG_DARK);
-        Theme.styleButton(btnBot, Theme.ORCHID, Theme.BG_DARK);
-        JPanel modes = Theme.transparent(new GridLayout(1, 2, 12, 0));
-        modes.add(btnQuickMatch);
-        modes.add(btnBot);
-        modes.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
-        Theme.addStack(text, modes, 0);
-        queue.add(text, BorderLayout.CENTER);
-        return queue;
+        btnQuickMatch.addActionListener(e -> toggleMatchmakingQueue());
+        btnQuickMatch.setText("Tìm đối thủ  →");
+        JPanel row = Theme.transparent(new BorderLayout());
+        row.add(btnQuickMatch, BorderLayout.CENTER);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
+        Theme.addStack(branch, row, 10);
+        Theme.addStack(branch, Theme.muted("Muốn đấu với bạn bè: tạo phòng riêng rồi gửi mã, hoặc nhập mã ở cột bên phải."), 0);
+        return branch;
+    }
+
+    private JPanel machineBranch() {
+        JPanel branch = Theme.stack();
+        Theme.styleButton(btnBot, Theme.AMBER, Theme.BG_DARK);
+        btnBot.addActionListener(e -> botDialog());
+        btnBot.setText("Chọn mức độ  →");
+        JPanel row = Theme.transparent(new BorderLayout());
+        row.add(btnBot, BorderLayout.CENTER);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 46));
+        Theme.addStack(branch, row, 10);
+        Theme.addStack(branch, Theme.muted("Máy không tính điểm xếp hạng. Ván tập vẫn lưu vào lịch sử đấu."), 0);
+        return branch;
+    }
+
+    private JPanel shipyardBranch() {
+        JPanel branch = Theme.transparent(new BorderLayout(12, 8));
+        fleetPreview = new JPanel() {
+            @Override protected void paintComponent(Graphics graphics) {
+                FleetSkin.paintFleetPreview((Graphics2D) graphics, 0, 0, getWidth(), getHeight());
+            }
+        };
+        fleetPreview.setOpaque(false);
+        fleetPreview.setPreferredSize(new Dimension(200, 132));
+        branch.add(fleetPreview, BorderLayout.WEST);
+
+        JPanel side = Theme.transparent(new BorderLayout(0, 8));
+        JPanel swatches = Theme.transparent(new GridLayout(2, 3, 8, 8));
+        final FleetSkin.Scheme[] schemes = FleetSkin.schemes();
+        final JButton[] chips = new JButton[schemes.length];
+        for (int i = 0; i < schemes.length; i++) {
+            final int index = i;
+            JButton chip = new JButton(schemes[i].name());
+            chip.setFont(Theme.FONT_SMALL);
+            chip.setForeground(schemes[i].hull());
+            chip.setContentAreaFilled(false);
+            chip.setOpaque(false);
+            chip.setFocusPainted(false);
+            chip.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            chip.setBorder(swatchBorder(index == FleetSkin.index()));
+            chip.addActionListener(e -> {
+                FleetSkin.apply(index, txtFleetName.getText());
+                for (int other = 0; other < chips.length; other++) {
+                    chips[other].setBorder(swatchBorder(other == index));
+                }
+                fleetPreview.repaint();
+                status(shipyardStatus, "Đã sơn " + schemes[index].name().toLowerCase(Locale.ROOT) + " cho hạm đội.");
+            });
+            chips[i] = chip;
+            swatches.add(chip);
+        }
+        side.add(swatches, BorderLayout.NORTH);
+        JPanel rename = Theme.transparent(new BorderLayout(8, 0));
+        Theme.styleField(txtFleetName);
+        txtFleetName.setText(FleetSkin.fleetName());
+        txtFleetName.setPreferredSize(new Dimension(150, 38));
+        JButton save = Theme.button("Đặt tên", false);
+        save.setFont(Theme.FONT_SMALL);
+        save.setBorder(new EmptyBorder(8, 12, 8, 12));
+        save.addActionListener(e -> {
+            FleetSkin.apply(FleetSkin.index(), txtFleetName.getText());
+            status(shipyardStatus, "Hạm đội của bạn giờ tên là \"" + FleetSkin.fleetName() + "\".");
+        });
+        rename.add(txtFleetName, BorderLayout.CENTER);
+        rename.add(save, BorderLayout.EAST);
+        side.add(rename, BorderLayout.CENTER);
+        shipyardStatus = Theme.muted("Màu này chỉ đổi hạm đội của bạn trên màn hình này.");
+        side.add(shipyardStatus, BorderLayout.SOUTH);
+        branch.add(side, BorderLayout.CENTER);
+        return branch;
+    }
+
+    private static void status(JLabel label, String text) {
+        if (label != null) {
+            label.setText(text);
+        }
+    }
+
+    private static final class ModeTile extends JButton {
+        private final int mode;
+        private final String title, subtitle;
+        private final Color accent;
+        private boolean chosen;
+
+        ModeTile(int mode, String title, String subtitle, Color accent) {
+            this.mode = mode;
+            this.title = title;
+            this.subtitle = subtitle;
+            this.accent = accent;
+            setOpaque(false);
+            setContentAreaFilled(false);
+            setBorderPainted(false);
+            setFocusPainted(false);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setBorder(new EmptyBorder(10, 12, 10, 12));
+            setRolloverEnabled(true);
+            setText(title);
+            setToolTipText(subtitle);
+        }
+
+        void setSelectedMode(boolean value) {
+            chosen = value;
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            Graphics2D g = Theme.graphics(graphics);
+            int w = getWidth(), h = getHeight();
+            Color base = chosen ? Theme.blend(new Color(10, 46, 61), accent, .30f)
+                    : getModel().isRollover() ? new Color(20, 66, 82) : new Color(12, 52, 66);
+            g.setPaint(new GradientPaint(0, 0, Theme.blend(base, Color.WHITE, .06f), 0, h, base));
+            g.fillRoundRect(0, 0, w - 1, h - 1, 16, 16);
+            g.setColor(chosen ? accent : new Color(255, 255, 255, 26));
+            g.setStroke(new BasicStroke(chosen ? 1.8f : 1.2f));
+            g.drawRoundRect(0, 0, w - 1, h - 1, 16, 16);
+            paintGlyph(g, 18, h / 2, 15, accent);
+            g.setFont(Theme.FONT_SMALL.deriveFont(Font.BOLD));
+            g.setColor(chosen ? accent : Theme.TEXT_MAIN);
+            g.drawString(title, 42, h / 2 - 2);
+            g.setFont(Theme.FONT_SMALL);
+            g.setColor(Theme.TEXT_MUTED);
+            g.drawString(subtitle, 42, h / 2 + 15);
+            g.dispose();
+        }
+
+        private void paintGlyph(Graphics2D g, int cx, int cy, int radius, Color accent) {
+            g.setColor(Theme.blend(accent, Theme.BG_DARK, .55f));
+            g.fillOval(cx - radius, cy - radius, radius * 2, radius * 2);
+            g.setColor(accent);
+            g.setStroke(new BasicStroke(1.6f));
+            g.drawOval(cx - radius, cy - radius, radius * 2, radius * 2);
+            if (mode == 0) {
+                g.drawLine(cx - 6, cy + 6, cx + 6, cy - 6);
+                g.drawLine(cx - 6, cy - 6, cx + 6, cy + 6);
+            } else if (mode == 1) {
+                g.drawRect(cx - 6, cy - 5, 12, 10);
+                g.drawLine(cx - 3, cy - 9, cx - 1, cy - 5);
+                g.drawLine(cx + 3, cy - 9, cx + 1, cy - 5);
+                g.fillOval(cx - 4, cy - 2, 3, 3);
+                g.fillOval(cx + 1, cy - 2, 3, 3);
+            } else {
+                int[] hullX = {cx - 7, cx - 3, cx + 7, cx + 7, cx - 3};
+                int[] hullY = {cy, cy - 5, cy - 5, cy + 5, cy + 5};
+                g.fillPolygon(hullX, hullY, 5);
+                g.drawLine(cx, cy, cx, cy - 8);
+            }
+        }
     }
 
     private JPanel onlineCard() {

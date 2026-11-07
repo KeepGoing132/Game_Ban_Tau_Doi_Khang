@@ -52,6 +52,7 @@ public class MatchResultView extends OceanPanel {
 
         boardHost.setLayout(new GridLayout(1, 2, 14, 0));
         myChart = new BoardGridPanel("HẢI PHẬN CỦA BẠN", false);
+        myChart.setSkinnedFleet(true);
         myChart.setFleet(myFleet);
         if (myBoard != null) myChart.mirrorStates(myBoard);
         enemyChart = new BoardGridPanel("HẢI PHẬN ĐỐI THỦ", false);

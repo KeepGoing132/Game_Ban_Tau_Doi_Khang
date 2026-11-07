@@ -96,6 +96,7 @@ public class BattlePanel extends OceanPanel {
         add(header(), BorderLayout.NORTH);
 
         myBoardGrid = new BoardGridPanel("Hạm đội của bạn", false);
+        myBoardGrid.setSkinnedFleet(true);
         oppBoardGrid = new BoardGridPanel("Hạm đội đối thủ", true);
         myBoardGrid.setFleet(myShips);
 

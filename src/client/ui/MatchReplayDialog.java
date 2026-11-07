@@ -40,6 +40,8 @@ public class MatchReplayDialog extends JDialog {
 
     private final BoardGridPanel myBoard = new BoardGridPanel("HẢI PHẬN CỦA BẠN", false);
     private final BoardGridPanel enemyBoard = new BoardGridPanel("HẢI PHẬN ĐỐI THỦ", false);
+
+    { myBoard.setSkinnedFleet(true); }
     private final List<Shot> shots = new ArrayList<>();
     private final List<Ship> myShips, enemyShips;
     private final DefaultListModel<String> shotModel = new DefaultListModel<>();
