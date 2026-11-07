@@ -69,7 +69,11 @@ public class SwingSmoke {
             closePlacement(a);waitFor(()->!present(b,"gameWindow"),"opponent returns lobby");
             edt(()->a.sendInvite(((User)field(b,"currentUser")).getUserId()));chooseConfirm();waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"invite placement");closePlacement(b);waitFor(()->!present(a,"gameWindow"),"invite cancellation cleanup");
             edt(()->clickField(field(a,"lobbyFrame"),"btnQuickMatch"));waitFor(()->(Boolean)field(field(a,"lobbyFrame"),"inQueue"),"queued");edt(()->clickField(field(a,"lobbyFrame"),"btnQuickMatch"));waitFor(()->!(Boolean)field(field(a,"lobbyFrame"),"inQueue"),"queue canceled");
-            edt(()->{clickField(field(a,"lobbyFrame"),"btnQuickMatch");clickField(field(b,"lobbyFrame"),"btnQuickMatch");});waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"queue placement");arrange(a);arrange(b);
+            edt(()->{clickField(field(a,"lobbyFrame"),"btnQuickMatch");clickField(field(b,"lobbyFrame"),"btnQuickMatch");});
+            waitFor(()->{for(Window w:Window.getWindows())if(w instanceof client.ui.VersusScreen && w.isShowing())return true;return false;},"versus screen before placement");
+            Thread.sleep(340);
+            edt(()->{for(Window w:Window.getWindows())if(w instanceof client.ui.VersusScreen && w.isShowing())snapshot(w,dir.resolve("versus.png"));});
+            waitFor(()->present(a,"placementPanel") && present(b,"placementPanel"),"queue placement");arrange(a);arrange(b);
             edt(()->{snapshot((Component)field(a,"gameWindow"),dir.resolve("placement.png"));snapshotMinimum((JFrame)field(a,"gameWindow"),dir.resolve("placement-small.png"));});
             edt(()->clickField(field(a,"placementPanel"),"btnReady"));waitFor(()->(Boolean)field(field(a,"placementPanel"),"ready"),"ready ack");
             edt(()->{Object p=field(a,"placementPanel");Object grid=field(p,"gridPanel");((JButton[][])field(grid,"cellButtons"))[8][8].doClick(0);TestRunner.check(((java.util.List<?>)field(p,"placedShips")).size()==5,"Ready locks board clicks");clickField(p,"btnReady");});waitFor(()->!(Boolean)field(field(a,"placementPanel"),"ready"),"cancel Ready ack");

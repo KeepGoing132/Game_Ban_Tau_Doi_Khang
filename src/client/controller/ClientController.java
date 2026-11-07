@@ -118,6 +118,10 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
 
     private MatchHistoryDialog historyDialog;
     private MatchReplayDialog replayDialog;
+    private VersusScreen versusScreen;
+    private long pendingPlacementDeadline;
+    private long pendingPlacementServerTime;
+    private long pendingPlacementReceivedNanos;
     private String pendingHistoryRequest;
     private boolean appendHistoryPage;
 
@@ -397,8 +401,15 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
             break;
             default: break;
         }
-        if (placementPanel != null && msg.getData().containsKey("placement_deadline_ms"))
-            placementPanel.setPlacementDeadline(JsonUtil.getLong(msg.getData(),"placement_deadline_ms",0),msg.getServerTimeMs());
+        if (msg.getData().containsKey("placement_deadline_ms")) {
+            long deadline = JsonUtil.getLong(msg.getData(), "placement_deadline_ms", 0);
+            if (placementPanel != null) placementPanel.setPlacementDeadline(deadline, msg.getServerTimeMs());
+            else {
+                pendingPlacementDeadline = deadline;
+                pendingPlacementServerTime = msg.getServerTimeMs();
+                pendingPlacementReceivedNanos = System.nanoTime();
+            }
+        }
         updateConnectionStatus();
     }
 
@@ -545,7 +556,7 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
                 opponentId = JsonUtil.getInt(msg.getData(), "opponent_id", 0);
                 opponentName = JsonUtil.getString(msg.getData(), "opponent_name", "");
                 if (lobbyFrame != null) lobbyFrame.resetQueueButton();
-                startShipPlacementPhase();
+                showVersusScreen();
                 break;
             }
             case INVITE_NOTIFY: {
@@ -798,7 +809,29 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         return fleet.isEmpty() ? null : fleet;
     }
 
+    private void showVersusScreen() {
+        closeVersusScreen();
+        String myName = currentUser == null ? "Bạn" : currentUser.getUsername();
+        int myPoints = currentUser == null ? 0 : currentUser.getTotalPoints();
+        String foe = opponentName == null || opponentName.isEmpty() ? "Đối thủ" : opponentName;
+        int foePoints = lobbyFrame == null ? 0 : lobbyFrame.pointsOf(opponentId);
+        int ships = common.config.GameConfig.SHIP_SIZES.length, cells = 0;
+        for (int size : common.config.GameConfig.SHIP_SIZES) cells += size;
+        versusScreen = new VersusScreen(lobbyFrame != null && lobbyFrame.isVisible() ? lobbyFrame : gameWindow,
+                myName, myPoints, foe, foePoints, practiceMatch ? "ĐẤU VỚI MÁY" : "", ships, cells,
+                this::startShipPlacementPhase);
+        versusScreen.setVisible(true);
+    }
+
+    private void closeVersusScreen() {
+        if (versusScreen != null) {
+            versusScreen.dispose();
+            versusScreen = null;
+        }
+    }
+
     private void startShipPlacementPhase() {
+        closeVersusScreen();
         screen = Screen.PLACEMENT;
         closeHistoryScreens();
         if (placementPanel != null) placementPanel.disposePanel();
@@ -823,6 +856,11 @@ public class ClientController implements ServerListener, BattlePanel.BattleActio
         }
         gameWindow.setTitle("Battleship • Triển khai hạm đội • " + opponentName);
         placementPanel = new PlacementPanel(this::sendReady);
+        if (pendingPlacementDeadline > 0) {
+            long covered = (System.nanoTime() - pendingPlacementReceivedNanos) / 1000000L;
+            placementPanel.setPlacementDeadline(Math.max(0, pendingPlacementDeadline - pendingPlacementServerTime - covered), 0);
+        }
+        pendingPlacementDeadline = 0; pendingPlacementServerTime = 0; pendingPlacementReceivedNanos = 0;
         placementPanel.setPresets(new client.model.FleetPresets(endpoint, currentUser.getUserId()));
         placementPanel.setCancelReadyListener(this::cancelReady);
         placementPanel.setMatchInfo(opponentName,this::leaveRoom);

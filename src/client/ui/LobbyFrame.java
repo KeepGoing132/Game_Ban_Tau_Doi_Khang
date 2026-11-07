@@ -21,6 +21,7 @@ public class LobbyFrame extends JFrame {
     private final JLabel lblPoints = Theme.label("0", Theme.FONT_TITLE, Theme.TEXT_MAIN);
     private final JLabel lblWins = Theme.label("0", Theme.FONT_TITLE, Theme.TEXT_MAIN);
     private final JLabel lblRate = Theme.label("0%", Theme.FONT_TITLE, Theme.TEXT_MAIN);
+    private final RankCard rankCard = new RankCard();
     private final JLabel lblOnlineCount = Theme.muted("Đang cập nhật hạm đội...");
     private final JLabel lblFeedback = Theme.muted("Chọn ghép trận nhanh hoặc mời một người bạn.");
     private final JLabel lblPenalty = Theme.badge(" ", Theme.WARNING);
@@ -69,7 +70,7 @@ public class LobbyFrame extends JFrame {
         root.add(main, BorderLayout.CENTER);
         main.add(profileHeader(), BorderLayout.NORTH);
 
-        tableModel = new DefaultTableModel(new String[]{"ID", "Chỉ huy", "Điểm", "Trạng thái"}, 0) {
+        tableModel = new DefaultTableModel(new String[]{"ID", "Chỉ huy", "Điểm", "Cấp bậc", "Trạng thái"}, 0) {
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
@@ -136,6 +137,8 @@ public class LobbyFrame extends JFrame {
         JPanel top = Theme.stack();
         Theme.addStack(top, lblUserInfo, 5);
         top.add(Box.createVerticalStrut(12));
+        rankCard.setMaximumSize(new Dimension(Integer.MAX_VALUE, 92));
+        Theme.addStack(top, rankCard, 14);
         JPanel stats = Theme.transparent(new GridLayout(1, 3, 14, 0));
         stats.add(stat("TỔNG ĐIỂM", lblPoints, "+3 điểm cho mỗi chiến thắng", Theme.AMBER));
         stats.add(stat("TRẬN THẮNG", lblWins, "Số trận thắng / đã chơi", Theme.MINT));
@@ -143,6 +146,62 @@ public class LobbyFrame extends JFrame {
         stats.setMaximumSize(new Dimension(Integer.MAX_VALUE, 94));
         Theme.addStack(top, stats, 0);
         return top;
+    }
+
+    private static final class RankCard extends JPanel {
+        private int points = -1;
+
+        RankCard() {
+            setOpaque(false);
+            setBorder(new EmptyBorder(14, 16, 14, 16));
+        }
+
+        void setPoints(int value) {
+            if (points == value) {
+                return;
+            }
+            points = value;
+            repaint();
+        }
+
+        @Override protected void paintComponent(Graphics graphics) {
+            if (points < 0) {
+                return;
+            }
+            int w = getWidth(), h = getHeight();
+            Graphics2D g = Theme.graphics(graphics);
+            Rank.Tier tier = Rank.of(points);
+            Rank.Tier next = Rank.next(points);
+            g.setPaint(new GradientPaint(0, 0, Theme.blend(new Color(8, 40, 54), tier.color(), .28f),
+                    0, h, Theme.blend(new Color(12, 56, 70), tier.color(), .14f)));
+            g.fillRoundRect(0, 0, w - 1, h - 1, 20, 20);
+            g.setColor(new Color(tier.color().getRed(), tier.color().getGreen(), tier.color().getBlue(), 150));
+            g.drawRoundRect(0, 0, w - 1, h - 1, 20, 20);
+            int insignia = Math.min(h - 12, 64);
+            Rank.paintInsignia(g, 12, (h - insignia) / 2, insignia, points);
+            int textX = 12 + insignia + 16;
+            g.setFont(Theme.FONT_SMALL.deriveFont(Font.BOLD));
+            g.setColor(Theme.TEXT_MUTED);
+            g.drawString("CẤP BẬC HIỆN TẠI", textX, 30);
+            g.setFont(Theme.FONT_HEADER);
+            g.setColor(tier.color());
+            g.drawString(tier.name().toUpperCase(Locale.ROOT), textX, 54);
+            int barX = textX, barW = Math.max(60, w - barX - 22), barY = h - 26;
+            g.setColor(new Color(255, 255, 255, 22));
+            g.fillRoundRect(barX, barY, barW, 8, 8, 8);
+            g.setColor(tier.color());
+            g.fillRoundRect(barX, barY, Math.max(8, (int) (barW * Rank.progress(points))), 8, 8, 8);
+            g.setFont(Theme.FONT_SMALL);
+            g.setColor(Theme.TEXT_MUTED);
+            String note = Rank.summary(points);
+            FontMetrics metrics = g.getFontMetrics();
+            g.drawString(note, Math.max(barX, barX + barW - metrics.stringWidth(note)), barY - 8);
+            if (next != null) {
+                String reached = points + " điểm";
+                g.drawString(reached, barX, barY - 8);
+            }
+            g.dispose();
+        }
     }
 
     private JPanel stat(String title, JLabel value, String detail, Color accent) {
@@ -332,9 +391,21 @@ public class LobbyFrame extends JFrame {
         currentUserId = user.getUserId();
         lblUserInfo.setText("Chào mừng, " + user.getUsername());
         lblPoints.setText(String.valueOf(user.getTotalPoints()));
+        rankCard.setPoints(user.getTotalPoints());
         lblWins.setText(user.getTotalWins() + " / " + user.getTotalGames());
         lblRate.setText(String.format(Locale.ROOT, "%.0f%%", user.getWinRate()));
         updateActions();
+    }
+
+    public int pointsOf(int userId) {
+        for (int row = 0; row < tableModel.getRowCount(); row++) {
+            Object id = tableModel.getValueAt(row, 0);
+            if (id instanceof Integer && (Integer) id == userId) {
+                Object points = tableModel.getValueAt(row, 2);
+                return points instanceof Integer ? (Integer) points : 0;
+            }
+        }
+        return 0;
     }
 
     public void updateOnlineUsers(List<Object> users) {
@@ -354,8 +425,9 @@ public class LobbyFrame extends JFrame {
                 String status = JsonUtil.getString(user, "status", "IDLE");
                 boolean blocked = JsonUtil.getLong(user, "matchmaking_wait_ms", 0) > 0
                         || JsonUtil.getBoolean(user, "penalty_pending", false);
+                int points = JsonUtil.getInt(user, "total_points", 0);
                 tableModel.addRow(new Object[]{id, JsonUtil.getString(user, "username", ""),
-                        JsonUtil.getInt(user, "total_points", 0),
+                        points, Rank.of(points).name(),
                         blocked ? "Đang bị phạt" : "IDLE".equals(status) ? "● Sẵn sàng" : "Đang bận"});
                 others++;
                 if (selected != null && selected == id) {
