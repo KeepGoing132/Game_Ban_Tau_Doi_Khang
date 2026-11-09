@@ -67,6 +67,7 @@ public class BattlePanel extends OceanPanel {
     private int oppRemainingShips = 5;
     private int shots;
     private int hits;
+    private int opponentHits;
     private boolean animating;
     private boolean impactPlayed;
     private boolean practice;
@@ -307,8 +308,8 @@ public class BattlePanel extends OceanPanel {
     }
 
     private void updateFleet() {
-        lblMyFleetStatus.setText(myName + "  •  " + myRemainingShips + " / 5 tàu");
-        lblOppFleetStatus.setText(oppName + "  •  " + oppRemainingShips + " / 5 tàu");
+        lblMyFleetStatus.setText(myName + "  •  " + myRemainingShips + " / 5 tàu  •  " + hits + " phát trúng");
+        lblOppFleetStatus.setText(oppName + "  •  " + oppRemainingShips + " / 5 tàu  •  " + opponentHits + " phát trúng");
     }
 
     private void hint(String text, Color color) {
@@ -378,11 +379,22 @@ public class BattlePanel extends OceanPanel {
             }
             lblAccuracy.setText(shots + " phát bắn  /  " + hits + " trúng đích");
         } else {
+            if (result != ShotResult.MISS) {
+                opponentHits++;
+            }
             myRemainingShips = shipsLeft;
         }
         String outcome = result == ShotResult.MISS ? "Trượt" : result == ShotResult.HIT ? "Trúng tàu" : "Đánh chìm";
         log((iAmShooter ? "Bạn" : "Đối thủ") + "  •  " + BoardGridPanel.coordinate(cell.getX(), cell.getY()) + "  •  " + outcome);
         updateFleet();
+    }
+
+    public int myHits() {
+        return hits;
+    }
+
+    public int opponentHits() {
+        return opponentHits;
     }
 
     public void setTurn(boolean myTurn, int timeLimitSec) {

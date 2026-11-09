@@ -30,7 +30,7 @@ public final class VisualFeatureTests {
             SwingSmoke.waitFor(()->{for(Window w:Window.getWindows())if(w instanceof JDialog&&w.isShowing()&&"Đấu máy".equals(((JDialog)w).getTitle())){SwingSmoke.snapshot(w,dir.resolve("bot-levels.png"));SwingSmoke.button((Container)w,"Khó").doClick(0);return true;}return false;},"difficulty choice");
             SwingSmoke.waitFor(()->field(client,"placementPanel")!=null,"bot starts placement");SwingSmoke.arrange(client);
             SwingSmoke.edt(()->SwingSmoke.clickField(field(client,"placementPanel"),"btnReady"));SwingSmoke.waitFor(()->field(client,"battlePanel")!=null,"bot battle starts");
-            SwingSmoke.edt(()->{BattlePanel battle=(BattlePanel)field(client,"battlePanel");check((Boolean)field(battle,"practice"),"practice mode reaches battle confirmation");SwingSmoke.snapshot((Component)field(client,"gameWindow"),dir.resolve("bot-battle.png"));client.onSurrender();});
+            SwingSmoke.edt(()->{BattlePanel battle=(BattlePanel)field(client,"battlePanel");check((Boolean)field(battle,"practice"),"practice mode reaches battle confirmation");check(((JLabel)field(battle,"lblMyFleetStatus")).getText().contains("phát trúng")&&((JLabel)field(battle,"lblOppFleetStatus")).getText().contains("phát trúng"),"practice battle shows hit counters for both the player and bot");SwingSmoke.snapshot((Component)field(client,"gameWindow"),dir.resolve("bot-battle.png"));client.onSurrender();});
             SwingSmoke.waitFor(()->field(client,"gameWindow")==null,"practice exits");check(server.getStorage().findByUsername("visual").getMatchmakingBlockedUntil()==0,"practice exit no ban");
             SwingSmoke.edt(()->SwingUtilities.invokeLater(()->{try{SwingSmoke.clickField(field(client,"lobbyFrame"),"btnAccount");}catch(Exception e){throw new RuntimeException(e);}}));
             SwingSmoke.waitFor(()->{for(Window w:Window.getWindows())if(w instanceof JDialog&&w.isShowing()&&"Tài khoản".equals(((JDialog)w).getTitle())){SwingSmoke.button((Container)w,"Xóa tài khoản").doClick(0);return true;}return false;},"account menu");
@@ -53,6 +53,9 @@ public final class VisualFeatureTests {
                 SwingSmoke.snapshot(frame.get(),dir.resolve("defense.png"));JCheckBox toggle=(JCheckBox)field(battle,"miniToggle");if(toggle.isSelected())toggle.doClick();
                 check(!((Component)field(battle,"miniBoardHost")).isVisible(),"minimap hides");battle.setTurn(true,15);SwingSmoke.snapshot(frame.get(),dir.resolve("no-minimap.png"));toggle.doClick();
                 battle.handleFireResult(true,new Coordinate(4,3),ShotResult.SUNK,Arrays.asList(new Coordinate(2,3),new Coordinate(3,3),new Coordinate(4,3)),4,true);battle.setTurn(true,15);
+                check(battle.myHits()==1 && battle.opponentHits()==0,"fleet status counts the local hit once");
+                check(((JLabel)field(battle,"lblMyFleetStatus")).getText().contains("1 phát trúng"),"local fleet status shows hit count");
+                check(((JLabel)field(battle,"lblOppFleetStatus")).getText().contains("0 phát trúng"),"opponent fleet status starts at zero hits");
                 check(!((JButton)field(battle,"btnFire")).isEnabled(),"effect does not enable duplicate shots");
             });
             java.util.List<BufferedImage> frames=new ArrayList<>();
@@ -72,6 +75,11 @@ public final class VisualFeatureTests {
                 }writer.endWriteSequence();
             }finally{writer.dispose();}
             SwingSmoke.waitFor(()->!battle.isAnimating(),"animation terminates");
+            SwingSmoke.edt(()->{
+                battle.handleFireResult(false,new Coordinate(0,0),ShotResult.HIT,null,5,true);
+                check(battle.myHits()==1 && battle.opponentHits()==1,"fleet status counts each player's hits independently");
+                check(((JLabel)field(battle,"lblOppFleetStatus")).getText().contains("1 phát trúng"),"opponent fleet status shows hit count");
+            });
         }finally{SwingSmoke.edt(()->{JCheckBox toggle=(JCheckBox)field(battle,"miniToggle");if(toggle.isSelected()!=original)toggle.doClick();battle.disposePanel();frame.get().dispose();check(!((javax.swing.Timer)field(battle,"effectTimer")).isRunning(),"animation timer disposed");});}
     }
     private static void audio(Path dir)throws Exception {
